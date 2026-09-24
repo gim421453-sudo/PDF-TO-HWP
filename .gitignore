@@ -1,0 +1,59 @@
+# Visual Studio / .NET
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Local build scratch
+.build*/
+.out*/
+TestResults/
+
+# Verification output
+artifacts/verification/
+*.binlog
+*.trx
+
+# Published EXE / release output
+artifacts/win-x64-singlefile/
+artifacts/win-x64-singlefile-*/
+artifacts/publish/
+publish/
+
+# Runtime/temp
+*.tmp
+*.temp
+*.log
+
+# Local app/cache data
+.cache/
+temp/
+tmp/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Storeartifacts/generator-bin/
+
+# Generated build/test scratch under artifacts
+artifacts/generator-bin*/
+artifacts/generator-obj*/
+artifacts/vf-bin*/
+artifacts/vf-obj*/
+artifacts/vf-final-bin*/
+artifacts/vf-final-obj*/
+artifacts/vf19-bin*/
+artifacts/vf19-obj*/
+artifacts/inset-bin*/
+artifacts/inset-obj*/
+
+# Build diagnostics / temporary verification outputs
+artifacts/build-diagnostics/
+
+# General generated binaries/debug symbols
+*.pdb

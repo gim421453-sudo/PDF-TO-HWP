@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>PDF2HWP</AssemblyName>
+    <Product>PDF2HWP</Product>
+    <Description>PDF to HWPX/HWP high-fidelity converter</Description>
+    <Company>PDF2HWP Project</Company>
+    <Authors>PDF2HWP Project</Authors>
+    <Copyright>Copyright © PDF2HWP Project</Copyright>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\Pdf2Hwp.Core\Pdf2Hwp.Core.csproj" /><ProjectReference Include="..\Pdf2Hwp.Infrastructure\Pdf2Hwp.Infrastructure.csproj" /></ItemGroup>
+  <Target Name="ExcludeDebugSymbolSidecarsFromSingleFilePublish" AfterTargets="ComputeFilesToPublish" Condition="'$(PublishSingleFile)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+</Project>

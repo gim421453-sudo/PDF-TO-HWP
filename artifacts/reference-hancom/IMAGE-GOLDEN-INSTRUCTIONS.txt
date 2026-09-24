@@ -1,0 +1,13 @@
+PDF2HWP image compatibility golden procedure
+
+PNG:
+1. Open a new blank document in Hancom Office 2024 and select A4 portrait.
+2. Insert only C:\dev\Hwp\artifacts\reference-hancom\image-source\05-source.png using the default insertion option.
+3. Do not add text, tables, shapes, borders, effects, rotation, or cropping.
+4. Save as C:\dev\Hwp\artifacts\reference-hancom\hancom-image-png-reference.hwpx.
+5. Close Hancom, reopen the file, and record whether it opens without a warning or crash.
+
+JPEG:
+Repeat the same steps with C:\dev\Hwp\artifacts\reference-hancom\image-source\06-source.jpg and save as C:\dev\Hwp\artifacts\reference-hancom\hancom-image-jpeg-reference.hwpx.
+
+Do not modify the source images or the generated samples. IMAGE_COMPATIBILITY_PASS must not be reported until both files have been manually opened and reopened.

@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><NoWarn>$(NoWarn);CA1416</NoWarn></PropertyGroup>
+  <ItemGroup><ProjectReference Include="..\..\src\Pdf2Hwp.Core\Pdf2Hwp.Core.csproj" /><ProjectReference Include="..\..\src\Pdf2Hwp.Infrastructure\Pdf2Hwp.Infrastructure.csproj" /></ItemGroup>
+</Project>
