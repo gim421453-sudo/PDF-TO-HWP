@@ -33,7 +33,7 @@ Avoided: MuPDF/Ghostscript and iText community paths because AGPL creates distri
 
 ## Important risks / next work
 
-The emitted HWPX is a deliberately minimal proof package, not yet a claim of Hancom interoperability. Before production, validate against installed Hancom versions and official KS X 6101/OWPML schema/examples. The current writer does not yet encode page geometry, fonts, tables, images, shapes, OCR, visual fallback, HWP export, or PDF-vs-output rendering comparison. `PDFtoImage` serializes PDFium calls, so true render parallelism requires safely isolated worker processes or a renderer chosen after benchmarking.
+The HWPX writer supports page geometry, embedded images, and page-background images; compatibility claims remain limited to the documented automated and Hancom-manual results above. Font/table/shape reconstruction, OCR, Safe Hybrid fallback, HWP export, and end-to-end PDF-vs-output rendering comparison remain unsupported or unverified. `PDFtoImage` serializes PDFium calls, so true render parallelism requires safely isolated worker processes or a renderer chosen after benchmarking.
 
 ## Current Status
 
