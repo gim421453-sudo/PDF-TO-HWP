@@ -60,10 +60,10 @@ On the next session, first verify this commit is present after the user's Git sy
 - Required: Windows x64, .NET SDK/runtime supporting the net8.0 projects, NuGet restore; Hancom Office 2024 only for manual compatibility checks.
 - External services: none identified as required for local build/test.
 - Secrets: none recorded.
-- Current synchronization readiness: `READY_WITH_WARNINGS`; source, handoff and recovery documents remain local/uncommitted. Cross-device availability depends on user Git synchronization.
+- Current synchronization readiness: `READY_WITH_WARNINGS`; the verified repair is committed locally but has not been pushed, and pre-existing `docs/recovery/` remains untracked and untouched. Cross-device availability depends on user Git synchronization.
 
 ## Git state
 
-- Branch: `main`; pre-task HEAD: `dcea1905f2b4eb17bb3e45ec4758519fe9ba1371`; final commit SHA is recorded in the task result.
+- Branch: `main`; pre-task HEAD: `dcea1905f2b4eb17bb3e45ec4758519fe9ba1371`; production repair commit: `cd7ced419d23c00910c77456a30b3284cb089491`.
 - Expected preserved tracked changes: `src/Pdf2Hwp.App/MainWindow.xaml.cs`, `src/Pdf2Hwp.Core/ApplicationContracts.cs`, `src/Pdf2Hwp.Infrastructure/ConversionJobService.cs`, `tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs`.
 - The verified repair, audit, license texts, docs, tests and publish/audit scripts are committed on `main`; push was not run. Pre-existing `docs/recovery/` remains untracked and untouched. No reset/clean/stash/pull/push/fetch/branch operation was run.
