@@ -56,6 +56,7 @@ public sealed class HwpxImagePackageWriter
                     cancellationToken.ThrowIfCancellationRequested();
                     var section = new HwpxSectionWriter().Write(page);
                     section = section.Replace("borderFillIDRef=\"1\"", "borderFillIDRef=\"3\"", StringComparison.Ordinal);
+                    section = StripFullPageBodyText(section);
                     Put(zip, $"Contents/section{page.Number - 1}.xml", section);
                 }
                 Put(zip, resource.PackagePath, resource.Bytes, CompressionLevel.Optimal);
@@ -72,8 +73,14 @@ public sealed class HwpxImagePackageWriter
     }
 
     public async Task WritePageBackgroundsAsync(PdfDocumentInfo document, string outputPath, IReadOnlyList<HwpxBinaryResource> resources, CancellationToken cancellationToken)
+        => await WritePageBackgroundsAsync(document, outputPath, resources, resources.Select(r => r.Id).ToArray(), cancellationToken);
+
+    public async Task WritePageBackgroundsAsync(PdfDocumentInfo document, string outputPath, IReadOnlyList<HwpxBinaryResource> resources, IReadOnlyList<string> pageResourceIds, CancellationToken cancellationToken)
     {
-        if (resources.Count != document.PageCount) throw new ArgumentException("One background resource is required per page.", nameof(resources));
+        if (pageResourceIds.Count != document.PageCount) throw new ArgumentException("One background resource ID is required per page.", nameof(pageResourceIds));
+        if (resources.Select(r => r.Id).Distinct(StringComparer.Ordinal).Count() != resources.Count) throw new ArgumentException("Background resource IDs must be unique.", nameof(resources));
+        var resourceIds = resources.Select(r => r.Id).ToHashSet(StringComparer.Ordinal);
+        if (pageResourceIds.Any(id => !resourceIds.Contains(id))) throw new ArgumentException("A page references an unregistered background resource.", nameof(pageResourceIds));
         var directory = Path.GetDirectoryName(outputPath) ?? throw new InvalidOperationException("Output path has no directory.");
         Directory.CreateDirectory(directory);
         var temporary = Path.Combine(directory, $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
@@ -88,8 +95,9 @@ public sealed class HwpxImagePackageWriter
                 foreach (var page in document.Pages)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var resource = resources[page.Number - 1];
-                    var section = new HwpxSectionWriter().Write(page).Replace("pageBorderFill type=\"BOTH\" borderFillIDRef=\"1\"", $"pageBorderFill type=\"BOTH\" borderFillIDRef=\"{page.Number + 2}\"", StringComparison.Ordinal);
+                    var resourceIndex = resources.ToList().FindIndex(r => r.Id == pageResourceIds[page.Number - 1]);
+                    var section = new HwpxSectionWriter().Write(page).Replace("pageBorderFill type=\"BOTH\" borderFillIDRef=\"1\"", $"pageBorderFill type=\"BOTH\" borderFillIDRef=\"{resourceIndex + 3}\"", StringComparison.Ordinal);
+                    section = StripFullPageBodyText(section);
                     Put(zip, $"Contents/section{page.Number - 1}.xml", section);
                 }
                 foreach (var resource in resources) Put(zip, resource.PackagePath, resource.Bytes, CompressionLevel.Optimal);
@@ -104,7 +112,25 @@ public sealed class HwpxImagePackageWriter
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
     private static string InsertIntoFirstRun(string section, string picture) { var marker = "</hp:run>"; var index = section.IndexOf(marker, StringComparison.Ordinal); return index < 0 ? throw new InvalidDataException("Section has no run.") : section.Insert(index, picture); }
-    private static string StripFullPageBodyText(string section) { var start = section.IndexOf("<hp:run charPrIDRef=\"0\"><hp:t>", StringComparison.Ordinal); if (start < 0) return section; var end = section.IndexOf("</hp:run>", start, StringComparison.Ordinal) + "</hp:run>".Length; section = section.Remove(start, end - start); var lines = section.IndexOf("<hp:linesegarray>", StringComparison.Ordinal); if (lines >= 0) { var linesEnd = section.IndexOf("</hp:linesegarray>", lines, StringComparison.Ordinal) + "</hp:linesegarray>".Length; section = section.Remove(lines, linesEnd - lines); } return section; }
+    private static string StripFullPageBodyText(string section)
+    {
+        const string runStart = "<hp:run"; const string runEnd = "</hp:run>";
+        while (true)
+        {
+            var text = section.IndexOf("<hp:t", StringComparison.Ordinal); if (text < 0) break;
+            var start = section.LastIndexOf(runStart, text, StringComparison.Ordinal); var endTag = section.IndexOf(runEnd, text, StringComparison.Ordinal);
+            if (start < 0 || endTag < 0) break;
+            section = section.Remove(start, endTag + runEnd.Length - start);
+        }
+        const string lineStart = "<hp:linesegarray>"; const string lineEnd = "</hp:linesegarray>";
+        while (true)
+        {
+            var start = section.IndexOf(lineStart, StringComparison.Ordinal); if (start < 0) break;
+            var end = section.IndexOf(lineEnd, start, StringComparison.Ordinal); if (end < 0) break;
+            section = section.Remove(start, end + lineEnd.Length - start);
+        }
+        return section;
+    }
     private static string ImageManifest(int pages, HwpxBinaryResource r) { var items = string.Concat(Enumerable.Range(0, pages).Select(i => $"<opf:item id=\"section{i}\" href=\"Contents/section{i}.xml\" media-type=\"application/xml\"/>")); var spine = string.Concat(Enumerable.Range(0, pages).Select(i => $"<opf:itemref idref=\"section{i}\" linear=\"yes\"/>")); var mime = r.MimeType == "image/jpeg" ? "image/jpg" : r.MimeType; return $"<?xml version=\"1.0\" encoding=\"UTF-8\"?><opf:package xmlns:opf=\"{HwpxNamespaces.Opf}\" version=\"\" unique-identifier=\"\" id=\"\"><opf:metadata><opf:title>PDF2HWP image compatibility sample</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest><opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/>{items}<opf:item id=\"settings\" href=\"settings.xml\" media-type=\"application/xml\"/><opf:item id=\"{r.Id}\" href=\"{r.PackagePath}\" media-type=\"{mime}\" isEmbeded=\"1\"/></opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/>{spine}</opf:spine></opf:package>"; }
     private static string ImageManifest(int pages, IReadOnlyList<HwpxBinaryResource> resources) { var items = string.Concat(Enumerable.Range(0, pages).Select(i => $"<opf:item id=\"section{i}\" href=\"Contents/section{i}.xml\" media-type=\"application/xml\"/>")); var spine = string.Concat(Enumerable.Range(0, pages).Select(i => $"<opf:itemref idref=\"section{i}\" linear=\"yes\"/>")); var imageItems = string.Concat(resources.Select(r => $"<opf:item id=\"{r.Id}\" href=\"{r.PackagePath}\" media-type=\"{(r.MimeType == "image/jpeg" ? "image/jpg" : r.MimeType)}\" isEmbeded=\"1\"/>")); return $"<?xml version=\"1.0\" encoding=\"UTF-8\"?><opf:package xmlns:opf=\"{HwpxNamespaces.Opf}\" version=\"\" unique-identifier=\"\" id=\"\"><opf:metadata><opf:title>PDF2HWP Visual Fidelity multi-page</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest><opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/>{items}<opf:item id=\"settings\" href=\"settings.xml\" media-type=\"application/xml\"/>{imageItems}</opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/>{spine}</opf:spine></opf:package>"; }
     private static string PicXml(HwpxImagePlacement p, HwpxBinaryResource r) { var nativeWidth = (long)Math.Round(r.PixelWidth * 64.87375d); var nativeHeight = (long)Math.Round(r.PixelHeight * 64.875d); var scaleX = p.Width / (double)nativeWidth; var scaleY = p.Height / (double)nativeHeight; var flow = p.FullPage ? 0 : 1; return $"<hp:pic id=\"{p.ObjectId}\" zOrder=\"0\" numberingType=\"PICTURE\" textWrap=\"SQUARE\" textFlow=\"BOTH_SIDES\" lock=\"0\" dropcapstyle=\"None\" href=\"\" groupLevel=\"0\" instid=\"1\" reverse=\"0\"><hp:offset x=\"{p.X}\" y=\"{p.Y}\"/><hp:orgSz width=\"{nativeWidth}\" height=\"{nativeHeight}\"/><hp:curSz width=\"{p.Width}\" height=\"{p.Height}\"/><hp:flip horizontal=\"0\" vertical=\"0\"/><hp:rotationInfo angle=\"0\" centerX=\"{p.Width/2}\" centerY=\"{p.Height/2}\" rotateimage=\"1\"/><hp:renderingInfo><hc:transMatrix xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" e1=\"1\" e2=\"0\" e3=\"0\" e4=\"0\" e5=\"1\" e6=\"0\"/><hc:scaMatrix xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" e1=\"{scaleX.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}\" e2=\"0\" e3=\"0\" e4=\"0\" e5=\"{scaleY.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)}\" e6=\"0\"/><hc:rotMatrix xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" e1=\"1\" e2=\"0\" e3=\"0\" e4=\"0\" e5=\"1\" e6=\"0\"/></hp:renderingInfo><hc:img xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" binaryItemIDRef=\"{p.ResourceId}\" bright=\"0\" contrast=\"0\" effect=\"REAL_PIC\" alpha=\"0\"/><hp:imgRect><hc:pt0 xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" x=\"0\" y=\"0\"/><hc:pt1 xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" x=\"{nativeWidth}\" y=\"0\"/><hc:pt2 xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" x=\"{nativeWidth}\" y=\"{nativeHeight}\"/><hc:pt3 xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" x=\"0\" y=\"{nativeHeight}\"/></hp:imgRect><hp:imgClip left=\"0\" right=\"{r.PixelWidth * 75}\" top=\"0\" bottom=\"{r.PixelHeight * 75}\"/><hp:inMargin left=\"0\" right=\"0\" top=\"0\" bottom=\"0\"/><hp:imgDim dimwidth=\"{r.PixelWidth * 75}\" dimheight=\"{r.PixelHeight * 75}\"/><hp:effects/><hp:sz width=\"{p.Width}\" widthRelTo=\"ABSOLUTE\" height=\"{p.Height}\" heightRelTo=\"ABSOLUTE\" protect=\"0\"/><hp:pos treatAsChar=\"0\" affectLSpacing=\"0\" flowWithText=\"{flow}\" allowOverlap=\"1\" vertRelTo=\"PAPER\" horzRelTo=\"PAPER\" vertAlign=\"TOP\" horzAlign=\"LEFT\" vertOffset=\"{p.Y}\" horzOffset=\"{p.X}\"/><hp:outMargin left=\"0\" right=\"0\" top=\"0\" bottom=\"0\"/><hp:shapeComment>PDF2HWP image</hp:shapeComment></hp:pic>"; }

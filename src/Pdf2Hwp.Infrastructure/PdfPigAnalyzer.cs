@@ -14,10 +14,15 @@ public sealed class PdfPigAnalyzer : IPdfAnalyzer
         {
             cancellationToken.ThrowIfCancellationRequested();
             var page = document.GetPage(number);
+            var media = page.MediaBox.Bounds;
+            var crop = page.CropBox.Bounds;
             var glyphs = page.Letters.Select(letter => new PdfGlyph(
                 letter.Value, letter.FontName ?? "Unknown", letter.FontSize,
                 new PdfRect(letter.BoundingBox.Left, letter.BoundingBox.Bottom, letter.BoundingBox.Width, letter.BoundingBox.Height))).ToArray();
-            pages.Add(new PdfPageInfo(number, page.Width, page.Height, 0, null, glyphs.Length > 0, glyphs.Length == 0, glyphs));
+            var mediaBox = new PdfRect(media.Left, media.Bottom, media.Width, media.Height);
+            var cropBox = new PdfRect(crop.Left, crop.Bottom, crop.Width, crop.Height);
+            var cropBoxDiffers = Math.Abs(mediaBox.Left - cropBox.Left) > 0.01 || Math.Abs(mediaBox.Bottom - cropBox.Bottom) > 0.01 || Math.Abs(mediaBox.Width - cropBox.Width) > 0.01 || Math.Abs(mediaBox.Height - cropBox.Height) > 0.01;
+            pages.Add(new PdfPageInfo(number, page.Width, page.Height, page.Rotation.Value, cropBoxDiffers ? cropBox : null, glyphs.Length > 0, glyphs.Length == 0, glyphs, mediaBox));
         }
         return new PdfDocumentInfo(sourcePath, document.NumberOfPages, pages);
     }, cancellationToken);

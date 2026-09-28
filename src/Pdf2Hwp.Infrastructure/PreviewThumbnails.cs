@@ -44,7 +44,8 @@ public sealed class JobRenderCache(IPdfPageRenderer renderer, string jobDirector
         var watch = Stopwatch.StartNew(); Interlocked.Increment(ref _actualRenders);
         try
         {
-            var request = new RenderRequest(page.SourcePath, page.SourcePageIndex + 1, output + ".partial-" + Guid.NewGuid().ToString("N"), key.RenderQuality, RotationDegrees: key.RotationDegrees);
+            var crop = page.Crop is { } c ? new PdfRect(c.Left, c.Bottom, c.Width, c.Height) : null;
+            var request = new RenderRequest(page.SourcePath, page.SourcePageIndex + 1, output + ".partial-" + Guid.NewGuid().ToString("N"), key.RenderQuality, RotationDegrees: key.RotationDegrees, CropBox: crop, IntrinsicRotationDegrees: page.IntrinsicRotationDegrees);
             await renderer.RenderAsync(request, token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
             var dims = HwpxImageResourceWriter.ReadDimensions(await File.ReadAllBytesAsync(request.OutputPngPath, token).ConfigureAwait(false), "image/png");
@@ -70,7 +71,7 @@ public sealed class PdfiumPreviewThumbnailRenderer(IPdfPageRenderer renderer) : 
         try
         {
             var geometry = await PreviewGeometryAsync(sourceDocument, sourcePageIndex, options.LongEdge, cancellationToken).ConfigureAwait(false);
-            await renderer.RenderAsync(new RenderRequest(sourceDocument, sourcePageIndex + 1, temp, 72, geometry.Width, geometry.Height, geometry.Rotation), cancellationToken).ConfigureAwait(false);
+            await renderer.RenderAsync(new RenderRequest(sourceDocument, sourcePageIndex + 1, temp, 72, geometry.Width, geometry.Height, geometry.Rotation, IntrinsicRotationDegrees: geometry.Rotation), cancellationToken).ConfigureAwait(false);
             var bytes = await File.ReadAllBytesAsync(temp, cancellationToken).ConfigureAwait(false);
             var dimensions = HwpxImageResourceWriter.ReadDimensions(bytes, "image/png");
             return new(dimensions.Width, dimensions.Height, bytes, sourceHash, sourcePageIndex, watch.Elapsed, false);
@@ -117,10 +118,8 @@ public sealed class CachedPreviewThumbnailRenderer(
         }
         cache.RecordMiss();
         var key = path;
-        var lazy = _inflight.GetOrAdd(key, _ => new Lazy<Task<PreviewThumbnailResult>>(() => RenderAndStoreAsync(sourceDocument, sourcePageIndex, options, sourceHash, path, cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication));
-        try { return await lazy.Value.ConfigureAwait(false); }
-        catch { _inflight.TryRemove(new KeyValuePair<string, Lazy<Task<PreviewThumbnailResult>>>(key, lazy)); throw; }
-        finally { if (lazy.IsValueCreated && lazy.Value.IsCompletedSuccessfully) _inflight.TryRemove(new KeyValuePair<string, Lazy<Task<PreviewThumbnailResult>>>(key, lazy)); }
+        var shared = _inflight.GetOrAdd(key, _ => new Lazy<Task<PreviewThumbnailResult>>(() => RenderAndStoreAndEvictAsync(key, sourceDocument, sourcePageIndex, options, sourceHash, path), LazyThreadSafetyMode.ExecutionAndPublication));
+        return await shared.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
     public async Task InvalidateAsync(string sourceDocument, int sourcePageIndex, PreviewThumbnailOptions options, CancellationToken cancellationToken)
     {
@@ -143,6 +142,11 @@ public sealed class CachedPreviewThumbnailRenderer(
             return result with { SourceHash = hash };
         }
         finally { Interlocked.Decrement(ref _active); _gate.Release(); }
+    }
+    private async Task<PreviewThumbnailResult> RenderAndStoreAndEvictAsync(string key, string source, int page, PreviewThumbnailOptions options, string hash, string path)
+    {
+        try { return await RenderAndStoreAsync(source, page, options, hash, path, CancellationToken.None).ConfigureAwait(false); }
+        finally { _inflight.TryRemove(key, out _); }
     }
     public void Dispose() => _gate.Dispose();
 }

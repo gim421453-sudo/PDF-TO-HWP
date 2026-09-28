@@ -12,6 +12,10 @@
 - `eng/verify.ps1`은 canonical Restore / Build / Test 검증 스크립트다.
 - `eng/publish-win-x64.ps1`은 `win-x64`, self-contained, single-file 게시를 수행한다. 기본 출력 위치는 `artifacts/win-x64-singlefile`이다.
 - 게시 스크립트는 native library self-extract를 포함하고 trimming을 끈다.
+- 스크립트 출력은 `PDF2HWP.exe` single-file과 `THIRD_PARTY_NOTICES.md`, `licenses/third-party/` 원문 고지 자료로 구성된 release package다.
+- single-file은 실행 파일의 형식이다. 외부 배포 패키지는 실행 파일 외에 필요한 라이선스/고지 파일을 포함한다.
+- `THIRD_PARTY_NOTICES.md`에는 검증한 dependency, PDFium provenance와 번들 구성요소가 기록되어 있다. `eng/verify-license-assets.ps1`은 공식 PDFium attestation, package signatures, hash 일치 및 publish notice 동봉을 재검사한다.
+- PDFium 재배포 증거는 현재 resolved dependency 버전에 한정된다. dependency 버전이나 publish runtime이 바뀌면 notice와 audit 검증도 다시 수행해야 한다.
 
 ## 설정 및 외부 서비스
 

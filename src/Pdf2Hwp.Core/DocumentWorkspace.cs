@@ -6,7 +6,7 @@ public sealed record SourceDocument(Guid Id, string SourcePath, int PageCount)
 }
 
 public sealed record CropRegion(double Left, double Bottom, double Width, double Height);
-public sealed record DocumentPage(Guid Id, Guid SourceDocumentId, string SourcePath, int SourcePageIndex, int LogicalOutputIndex, int RotationDegrees, CropRegion? Crop, IReadOnlyList<string> OperationHistory)
+public sealed record DocumentPage(Guid Id, Guid SourceDocumentId, string SourcePath, int SourcePageIndex, int LogicalOutputIndex, int RotationDegrees, CropRegion? Crop, IReadOnlyList<string> OperationHistory, PdfRect? MediaBox = null, int IntrinsicRotationDegrees = 0)
 {
     public Guid StablePageId => Id;
     public bool IncludeInOutput { get; init; } = true;
@@ -43,9 +43,19 @@ public sealed class DocumentWorkspace
         ArgumentNullException.ThrowIfNull(pageInfo);
         if (pageInfo.Count != source.PageCount) throw new ArgumentException("Page metadata count does not match source page count.", nameof(pageInfo));
         ArgumentNullException.ThrowIfNull(source);
-        if (_sources.Any(s => s.Id == source.Id)) throw new InvalidOperationException("Duplicate source document ID.");
-        _sources.Add(source);
-        _pages.AddRange(pageInfo.Select((info, index) => new DocumentPage(Guid.NewGuid(), source.Id, source.SourcePath, index, index, info.Rotation, info.CropBox is null ? null : new CropRegion(info.CropBox.Left, info.CropBox.Bottom, info.CropBox.Width, info.CropBox.Height), ["Source"])));
+        var existing = _sources.FirstOrDefault(s => string.Equals(s.SourcePath, source.SourcePath, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            if (_pages.Any(page => page.SourceDocumentId == existing.Id)) throw new InvalidOperationException("Source document already has active pages.");
+            if (existing.PageCount != source.PageCount) throw new InvalidOperationException("Source page count changed; reset the workspace before reopening this source.");
+            source = existing;
+        }
+        else
+        {
+            if (_sources.Any(s => s.Id == source.Id)) throw new InvalidOperationException("Duplicate source document ID.");
+            _sources.Add(source);
+        }
+        _pages.AddRange(pageInfo.Select((info, index) => new DocumentPage(Guid.NewGuid(), source.Id, source.SourcePath, index, index, info.Rotation, info.CropBox is null ? null : new CropRegion(info.CropBox.Left, info.CropBox.Bottom, info.CropBox.Width, info.CropBox.Height), ["Source"], info.MediaBox, info.Rotation)));
         Reindex();
     }
     public void Apply(PageOperation operation)

@@ -35,6 +35,21 @@ public sealed class AutomationExpansionTests
     }
 
     [Fact]
+    public async Task CancellingOneThumbnailWaiterDoesNotCancelAnotherWaiter()
+    {
+        using var d = new TempDirectory(); var source = Path.Combine(d.Path, "a.pdf"); File.WriteAllText(source, "a");
+        var inner = new GatedThumbnailRenderer(); var cache = new PreviewThumbnailCache(Path.Combine(d.Path, "cache")); using var renderer = new CachedPreviewThumbnailRenderer(inner, cache);
+        using var cancelFirst = new CancellationTokenSource();
+        var first = renderer.RenderAsync(source, 0, new(300), cancelFirst.Token);
+        await inner.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var second = renderer.RenderAsync(source, 0, new(300), CancellationToken.None);
+        cancelFirst.Cancel(); await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        inner.Release.TrySetResult();
+        var result = await second;
+        Assert.Equal(1, inner.Count); Assert.Equal(0, renderer.ActiveRenderCount); Assert.True(File.Exists(cache.GetPath(result.SourceHash, 0, 300)));
+    }
+
+    [Fact]
     public async Task ConcurrentDuplicateRequestsUseOneJobRasterRender()
     {
         using var d = new TempDirectory(); var source = Path.Combine(d.Path, "a.pdf"); File.WriteAllText(source, "a");
@@ -98,6 +113,19 @@ public sealed class AutomationExpansionTests
     }
 
     [Fact]
+    public void RemovingAllPagesAllowsReaddingSameSourceWithoutBreakingUndoRedo()
+    {
+        using var d = new TempDirectory(); var source = SourceDocument.Create(Path.Combine(d.Path, "a.pdf"), 2);
+        var metadata = Enumerable.Range(1, 2).Select(i => new PdfPageInfo(i, 200, 300, 0, null, false, true, [], new PdfRect(0, 0, 200, 300))).ToArray();
+        var workspace = new DocumentWorkspace(); workspace.AddSource(source, metadata); var originalIds = workspace.Pages.Select(p => p.Id).ToArray();
+        var history = new WorkspaceHistory(workspace); history.Execute("remove all", w => w.RemovePages(originalIds)); Assert.Empty(workspace.Pages);
+        history.Execute("re-add source", w => w.AddSource(SourceDocument.Create(source.SourcePath, 2), metadata));
+        Assert.Equal(source.Id, workspace.Pages[0].SourceDocumentId); Assert.Empty(workspace.Pages.Select(p => p.Id).Intersect(originalIds));
+        var readdedIds = workspace.Pages.Select(p => p.Id).ToArray();
+        history.Undo(); Assert.Empty(workspace.Pages); history.Redo(); Assert.Equal(readdedIds, workspace.Pages.Select(p => p.Id));
+    }
+
+    [Fact]
     public void HundredPageSnapshotPreservesOrderAndBulkExclude()
     {
         using var d = new TempDirectory(); var workspace = new DocumentWorkspace(); workspace.AddSource(SourceDocument.Create(Path.Combine(d.Path, "a.pdf"), 100));
@@ -107,6 +135,14 @@ public sealed class AutomationExpansionTests
 
     private sealed class FakeThumbnailRenderer : IPreviewThumbnailRenderer { public int Count; public Task<PreviewThumbnailResult> RenderAsync(string source, int page, PreviewThumbnailOptions options, CancellationToken token) { Count++; return Task.FromResult(new PreviewThumbnailResult(1, 1, Png1x1, "", page, TimeSpan.Zero, false)); } }
     private sealed class SlowThumbnailRenderer : IPreviewThumbnailRenderer { public async Task<PreviewThumbnailResult> RenderAsync(string source, int page, PreviewThumbnailOptions options, CancellationToken token) { await Task.Delay(1000, token); return new(1, 1, Png1x1, "", page, TimeSpan.Zero, false); } }
+    private sealed class GatedThumbnailRenderer : IPreviewThumbnailRenderer
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Count;
+        public async Task<PreviewThumbnailResult> RenderAsync(string source, int page, PreviewThumbnailOptions options, CancellationToken token)
+        { Interlocked.Increment(ref Count); Started.TrySetResult(); await Release.Task.WaitAsync(token); return new(1, 1, Png1x1, "", page, TimeSpan.Zero, false); }
+    }
     private sealed class ConcurrencyThumbnailRenderer : IPreviewThumbnailRenderer
     {
         private int _active, _maximumActive, _count; public int Count => Volatile.Read(ref _count); public int MaximumActive => Volatile.Read(ref _maximumActive);

@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace Pdf2Hwp.Core;
 
-public enum ConversionJobStatus { Queued, Analyzing, Rendering, Writing, Validating, Completed, Cancelled, Failed }
+public enum ConversionJobStatus { Queued, Analyzing, Rendering, Writing, Validating, Completed, Cancelled, Failed, CompletedWithWarnings }
 public enum RenderQuality { Standard = 200, High = 300 }
 public sealed record ConversionProgress(ConversionJobStatus Status, string Stage, int Current, int Total, double Percentage);
 public sealed record ConversionJob(Guid Id, DateTimeOffset CreatedAt, IReadOnlyList<DocumentPage> Pages, RenderQuality Quality, string OutputPath, ConversionJobStatus Status = ConversionJobStatus.Queued);
@@ -25,47 +25,61 @@ public sealed record AppSettings(string LastOutputDirectory = "", RenderQuality 
 public sealed class JsonSettingsStore(string path)
 {
     private readonly System.Text.Json.JsonSerializerOptions _options = new() { WriteIndented = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
-    public AppSettings Load() { try { return File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), _options) ?? new() : new(); } catch { return new(); } }
+    public static IReadOnlyList<string> DrainRecoveryEvents() => AtomicJson.DrainRecoveryEvents();
+    public AppSettings Load() { if (!File.Exists(path)) return new(); try { return System.Text.Json.JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), _options) ?? new(); } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); return new(); } }
     public void Save(AppSettings settings) { AtomicJson.Write(path, System.Text.Json.JsonSerializer.Serialize(settings, _options)); }
 }
 public sealed class RecentFilesStore(string path, int maxEntries = 10)
 {
-    public IReadOnlyList<(string Path, DateTimeOffset OpenedAt)> Load() { try { if (!File.Exists(path)) return []; return System.Text.Json.JsonSerializer.Deserialize<List<RecentEntry>>(File.ReadAllText(path))?.Where(x => File.Exists(x.Path)).Take(maxEntries).Select(x => (x.Path, x.OpenedAt)).ToArray() ?? []; } catch { return []; } }
+    public IReadOnlyList<(string Path, DateTimeOffset OpenedAt)> Load() { if (!File.Exists(path)) return []; try { return System.Text.Json.JsonSerializer.Deserialize<List<RecentEntry>>(File.ReadAllText(path))?.Where(x => File.Exists(x.Path)).Take(maxEntries).Select(x => (x.Path, x.OpenedAt)).ToArray() ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); return []; } }
     public void Add(string file) => AtomicJson.Update(path, old =>
     {
-        List<RecentEntry> list; try { list = System.Text.Json.JsonSerializer.Deserialize<List<RecentEntry>>(old ?? "[]") ?? []; } catch { list = []; }
+        List<RecentEntry> list; try { list = System.Text.Json.JsonSerializer.Deserialize<List<RecentEntry>>(old ?? "[]") ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); list = []; }
         list = list.Where(x => File.Exists(x.Path) && !string.Equals(x.Path, file, StringComparison.OrdinalIgnoreCase)).ToList();
         list.Insert(0, new(file, DateTimeOffset.UtcNow)); return System.Text.Json.JsonSerializer.Serialize(list.Take(maxEntries));
+    });
+    public void Remove(string file) => AtomicJson.Update(path, old =>
+    {
+        List<RecentEntry> list; try { list = System.Text.Json.JsonSerializer.Deserialize<List<RecentEntry>>(old ?? "[]") ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); list = []; }
+        return System.Text.Json.JsonSerializer.Serialize(list.Where(x => !string.Equals(x.Path, file, StringComparison.OrdinalIgnoreCase)));
     });
     private sealed record RecentEntry(string Path, DateTimeOffset OpenedAt);
 }
 
 public sealed record HistoryPageEntry(string SourcePath, int SourcePageIndex);
-public sealed record ConversionHistoryEntry(DateTimeOffset Timestamp, IReadOnlyList<string> SourceDisplayNames, string OutputPath, int PageCount, RenderQuality RenderQuality, TimeSpan Duration, ConversionJobStatus Status, string AppVersion, IReadOnlyList<HistoryPageEntry>? Pages = null, int SchemaVersion = 1)
+public sealed record ConversionHistoryEntry(DateTimeOffset Timestamp, IReadOnlyList<string> SourceDisplayNames, string OutputPath, int PageCount, RenderQuality RenderQuality, TimeSpan Duration, ConversionJobStatus Status, string AppVersion, IReadOnlyList<HistoryPageEntry>? Pages = null, int SchemaVersion = 1, string? ReportPath = null)
 {
     public string OutputFileName => Path.GetFileName(OutputPath);
     public string Summary => $"{Timestamp.ToLocalTime():yyyy-MM-dd HH:mm} · {SourceDisplayNames.Count} PDF · {PageCount}쪽 · {Duration.TotalSeconds:0.0}s";
-    public string StatusLabel => Status switch { ConversionJobStatus.Completed => "완료", ConversionJobStatus.Cancelled => "취소", ConversionJobStatus.Failed => "실패", _ => Status.ToString() };
+    public string StatusLabel => Status switch { ConversionJobStatus.Completed => "완료", ConversionJobStatus.CompletedWithWarnings => "경고", ConversionJobStatus.Cancelled => "취소", ConversionJobStatus.Failed => "실패", _ => Status.ToString() };
     public bool CanRetry => Status is ConversionJobStatus.Failed or ConversionJobStatus.Cancelled && Pages is { Count: > 0 } && Pages.All(p => File.Exists(p.SourcePath));
 }
 public sealed class ConversionHistoryStore(string path, int maxEntries = 20)
 {
-    public IReadOnlyList<ConversionHistoryEntry> Load() { try { if (!File.Exists(path)) return []; return System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(File.ReadAllText(path))?.Take(maxEntries).ToArray() ?? []; } catch { return []; } }
+    public IReadOnlyList<ConversionHistoryEntry> Load() { if (!File.Exists(path)) return []; try { return System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(File.ReadAllText(path))?.Take(maxEntries).ToArray() ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); return []; } }
     public void Add(ConversionHistoryEntry entry) => AtomicJson.Update(path, old =>
     {
-        List<ConversionHistoryEntry> items; try { items = System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(old ?? "[]") ?? []; } catch { items = []; }
+        List<ConversionHistoryEntry> items; try { items = System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(old ?? "[]") ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); items = []; }
         return System.Text.Json.JsonSerializer.Serialize(new[] { entry }.Concat(items).Take(maxEntries));
     });
     public void Clear() => AtomicJson.Write(path, "[]");
     public void RemoveAt(int index) => AtomicJson.Update(path, old =>
     {
-        List<ConversionHistoryEntry> items; try { items = System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(old ?? "[]") ?? []; } catch { items = []; }
+        List<ConversionHistoryEntry> items; try { items = System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(old ?? "[]") ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); items = []; }
         if (index >= 0 && index < items.Count) items.RemoveAt(index);
         return System.Text.Json.JsonSerializer.Serialize(items);
     });
 }
 internal static class AtomicJson
 {
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<string> RecoveryEvents = new();
+    public static IReadOnlyList<string> DrainRecoveryEvents() { var events = new List<string>(); while (RecoveryEvents.TryDequeue(out var item)) events.Add(item); return events; }
+    public static void PreserveCorrupt(string path)
+    {
+        if (!File.Exists(path)) return;
+        var backup = path + ".corrupt." + DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", System.Globalization.CultureInfo.InvariantCulture) + ".bak";
+        File.Copy(path, backup, false); RecoveryEvents.Enqueue("손상된 상태 파일을 백업했습니다: " + Path.GetFileName(path));
+    }
     public static void Write(string path, string json)
     {
         WithMutex(path, () => WriteUnlocked(path, json));
@@ -74,7 +88,7 @@ internal static class AtomicJson
     {
         WithMutex(path, () =>
         {
-            string? old = null; try { if (File.Exists(path)) old = File.ReadAllText(path); } catch { }
+            string? old = File.Exists(path) ? File.ReadAllText(path) : null;
             WriteUnlocked(path, update(old));
         });
     }

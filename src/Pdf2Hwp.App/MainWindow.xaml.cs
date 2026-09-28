@@ -41,20 +41,34 @@ public partial class MainWindow : Window
     private void ClearPages(object sender, RoutedEventArgs e) { _viewModel.ClearPages(); }
     private async void Convert(object sender, RoutedEventArgs e)
     {
-        if (_cancellation is not null) return;
+        if (_cancellation is not null || _retryPreparing) return;
         try
         {
             _viewModel.ValidateOutput();
             _cancellation = new CancellationTokenSource();
             var progress = new Progress<ConversionProgress>(p => { _viewModel.Progress = p.Percentage; _viewModel.Status = $"{p.Stage} ({p.Current}/{p.Total})"; });
-            var service = new ConversionJobService(new PdfPigAnalyzer(), new HwpxWriter(), new HwpxPackageInspector());
+            var service = new ConversionJobService(new PdfPigAnalyzer(), new HwpxWriter(), new HwpxPackageInspector(), new PdfiumPageRenderer(), new HwpxImagePackageWriter());
             var jobSnapshot = _viewModel.Workspace.CreateOutputSnapshot();
             _viewModel.BeginJob(jobSnapshot);
             var result = await service.RunAsync(jobSnapshot, _viewModel.OutputDirectory, _viewModel.RenderQuality, progress, _cancellation.Token, _viewModel.OutputName);
             _viewModel.LastReport = result.Report;
-            _viewModel.RecordHistory(result.Report, result.Report.Validation.Status == ValidationStatus.Fail ? ConversionJobStatus.Failed : ConversionJobStatus.Completed);
+            var finalStatus = result.Report.Validation.Status switch
+            {
+                ValidationStatus.Pass => ConversionJobStatus.Completed,
+                ValidationStatus.Warning => ConversionJobStatus.CompletedWithWarnings,
+                _ => ConversionJobStatus.Failed
+            };
+            string? reportPath = null; string? reportWarning = null;
+            try { reportPath = _viewModel.SaveReport(result.Report); } catch (Exception reportError) { reportWarning = "보고서를 저장하지 못했습니다: " + reportError.Message; }
+            _viewModel.RecordHistory(result.Report, finalStatus, reportPath);
             _viewModel.ReportSummary = $"완료: {result.OutputFiles.Count}개 · 검증 {result.Report.Validation.Status}";
-            _viewModel.Status = result.Report.Warnings.Count == 0 ? "완료: 패키지 검증 PASS" : "완료: 경고가 있는 결과입니다.";
+            _viewModel.Status = result.Report.Validation.Status switch
+            {
+                ValidationStatus.Pass => "완료: 패키지 검증 PASS",
+                ValidationStatus.Warning => "경고: 검증 주의사항을 확인하세요.",
+                _ => "실패: 검증을 통과하지 못했습니다."
+            };
+            if (reportWarning is not null) _viewModel.Status += " " + reportWarning;
             _viewModel.Progress = 100;
         }
         catch (OperationCanceledException) { _viewModel.RecordOutcome(ConversionJobStatus.Cancelled); _viewModel.Status = "취소됨"; }
@@ -70,12 +84,34 @@ public partial class MainWindow : Window
     private void HistoryOpenReport(object sender, RoutedEventArgs e) => _viewModel.OpenHistoryReport();
     private void HistoryRemove(object sender, RoutedEventArgs e) => _viewModel.RemoveHistory();
     private void HistoryClear(object sender, RoutedEventArgs e) => _viewModel.ClearHistory();
-    private async void HistoryRetry(object sender, RoutedEventArgs e) { if (await _viewModel.PrepareRetryAsync()) Convert(sender, new RoutedEventArgs()); }
+    private bool _retryPreparing;
+    private async void HistoryRetry(object sender, RoutedEventArgs e)
+    {
+        if (_cancellation is not null || _retryPreparing) { _viewModel.Status = "변환 중에는 다시 시도할 수 없습니다."; return; }
+        _retryPreparing = true;
+        try
+        {
+            var prepared = await _viewModel.PrepareRetryAsync();
+            _retryPreparing = false;
+            if (prepared && _cancellation is null) Convert(sender, new RoutedEventArgs());
+        }
+        finally { _retryPreparing = false; }
+    }
     private void ClearPreviewCache(object sender, RoutedEventArgs e) { _viewModel.ClearPreviewCache(); }
     private void OpenDiagnostics(object sender, RoutedEventArgs e) { _viewModel.ExportDiagnostics(); }
     private void Undo(object sender, RoutedEventArgs e) { _viewModel.Undo(); PageList.SelectedItems.Clear(); }
     private void Redo(object sender, RoutedEventArgs e) { _viewModel.Redo(); PageList.SelectedItems.Clear(); }
-    private void OpenSettings(object sender, RoutedEventArgs e) { _viewModel.Status = "설정: 마지막 폴더와 렌더 품질은 자동 저장됩니다."; }
+    private void OpenSettings(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SettingsDialog(_viewModel.CurrentSettings) { Owner = this };
+        if (dialog.ShowDialog() == true) { try { _viewModel.ApplySettings(dialog.Value); _viewModel.Status = "설정을 저장했습니다."; } catch (Exception ex) { _viewModel.Status = "설정을 저장하지 못했습니다: " + ex.Message; } }
+    }
+    private async void OpenRecentFile(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not ListBox { SelectedItem: ValueTuple<string, DateTimeOffset> selected }) return;
+        if (!File.Exists(selected.Item1)) { _viewModel.RemoveRecent(selected.Item1); _viewModel.Status = "최근 파일을 찾을 수 없어 목록에서 제거했습니다."; return; }
+        await AddFilesAsync([selected.Item1]);
+    }
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.O) { SelectFiles(sender, new RoutedEventArgs()); e.Handled = true; }
@@ -105,7 +141,7 @@ public partial class MainWindow : Window
     private void OnPageMouseMove(object sender, MouseEventArgs e) { if (e.LeftButton != MouseButtonState.Pressed) return; var delta = e.GetPosition(PageList) - _dragStart; if (Math.Abs(delta.X) + Math.Abs(delta.Y) < 8) return; if (PageList.SelectedItem is PageViewModel page) DragDrop.DoDragDrop(PageList, page, DragDropEffects.Move); }
     private void OnPageDragOver(object sender, DragEventArgs e) { e.Effects = e.Data.GetDataPresent(typeof(PageViewModel)) ? DragDropEffects.Move : DragDropEffects.None; e.Handled = true; }
     private void OnPageDrop(object sender, DragEventArgs e) { if (e.Data.GetData(typeof(PageViewModel)) is not PageViewModel source || (e.OriginalSource as DependencyObject) is not DependencyObject target) return; if ((target as FrameworkElement)?.DataContext is PageViewModel destination && source != destination) _viewModel.MoveBefore(source, destination); }
-    private void OnClosing(object? sender, CancelEventArgs e) { if (_cancellation is not null) { _cancellation.Cancel(); _viewModel.Status = "변환 취소 중입니다. 완료 후 다시 닫아 주세요."; e.Cancel = true; return; } _viewModel.CancelAllPreviews(); _viewModel.SaveSettings(); }
+    private void OnClosing(object? sender, CancelEventArgs e) { if (_cancellation is not null) { _cancellation.Cancel(); _viewModel.Status = "변환 취소 중입니다. 완료 후 다시 닫아 주세요."; e.Cancel = true; return; } _viewModel.CancelAllPreviews(); try { _viewModel.SaveSettings(); } catch (Exception ex) { _viewModel.Status = "설정을 저장하지 못했습니다: " + ex.Message; } }
 }
 
 public sealed class PageViewModel(DocumentPage page) : INotifyPropertyChanged
@@ -141,25 +177,28 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public ConversionHistoryEntry? SelectedHistory { get => _selectedHistory; set => Set(ref _selectedHistory, value); }
     public string PreviewCacheSummary { get { var cache = _thumbnailCache.Measure(); return $"미리보기 캐시 {cache.Entries}개 · {cache.Bytes / 1024 / 1024} MB"; } }
     private string _outputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), _outputName = "PDF2HWP", _status = "PDF를 선택하거나 이 창으로 끌어 놓으세요.", _reportSummary = "페이지를 추가하세요.";
-    private double _progress; private OutputFormat _format = OutputFormat.Hwpx; private ConversionMode _mode = ConversionMode.SafeHybrid; private RenderQuality _renderQuality = RenderQuality.Standard; private bool _ocrAuto = true, _verify = true;
+    private double _progress; private OutputFormat _format = OutputFormat.Hwpx; private ConversionMode _mode = ConversionMode.VisualFidelity; private RenderQuality _renderQuality = RenderQuality.Standard; private bool _ocrAuto, _verify;
     public MainViewModel() { WorkspaceHistory = new WorkspaceHistory(Workspace); _thumbnailRenderer = new CachedPreviewThumbnailRenderer(new PdfiumPreviewThumbnailRenderer(new PdfiumPageRenderer()), _thumbnailCache, 2); }
     public string OutputDirectory { get => _outputDirectory; set => Set(ref _outputDirectory, value); } public string OutputName { get => _outputName; set => Set(ref _outputName, value); } public string Status { get => _status; set => Set(ref _status, value); } public string ReportSummary { get => _reportSummary; set => Set(ref _reportSummary, value); } public double Progress { get => _progress; set => Set(ref _progress, value); }
     public OutputFormat Format { get => _format; set => Set(ref _format, value); } public ConversionMode Mode { get => _mode; set => Set(ref _mode, value); } public RenderQuality RenderQuality { get => _renderQuality; set => Set(ref _renderQuality, value); } public bool OcrAuto { get => _ocrAuto; set => Set(ref _ocrAuto, value); } public bool Verify { get => _verify; set => Set(ref _verify, value); }
     public ConversionReport? LastReport { get; set; } public string PageSummary => $"총 {Pages.Count}페이지 · 출력 {Pages.Count(p => p.Included)}페이지 · PDF {Workspace.Sources.Count}개";
     public bool CanUndo => WorkspaceHistory.CanUndo; public bool CanRedo => WorkspaceHistory.CanRedo;
-    public void LoadSettings() { var s = _settings.Load(); if (!string.IsNullOrWhiteSpace(s.LastOutputDirectory)) OutputDirectory = s.LastOutputDirectory; RenderQuality = s.RenderQuality; foreach (var item in _recent.Load()) RecentFiles.Add(item); try { _thumbnailCache.Cleanup(); } catch { } }
-    public void SaveSettings() { _settings.Save(new(OutputDirectory, RenderQuality)); }
+    public AppSettings CurrentSettings => _settings.Load();
+    public void LoadSettings() { var s = _settings.Load(); if (s.RememberLastFolder && !string.IsNullOrWhiteSpace(s.LastOutputDirectory)) OutputDirectory = s.LastOutputDirectory; RenderQuality = s.RenderQuality; foreach (var item in _recent.Load()) RecentFiles.Add(item); try { _thumbnailCache.Cleanup(); } catch { } if (JsonSettingsStore.DrainRecoveryEvents().Count > 0) Status = "손상된 상태 파일을 백업했습니다. 설정 또는 기록을 확인하세요."; }
+    public void SaveSettings() { var current = _settings.Load(); _settings.Save(current with { LastOutputDirectory = current.RememberLastFolder ? OutputDirectory : "", RenderQuality = RenderQuality }); }
+    public void ApplySettings(AppSettings settings) { _settings.Save(settings); RenderQuality = settings.RenderQuality; if (settings.RememberLastFolder && !string.IsNullOrWhiteSpace(settings.LastOutputDirectory)) OutputDirectory = settings.LastOutputDirectory; }
     public async Task AddFilesAsync(IEnumerable<string> paths)
     {
         var analyzer = new PdfPigAnalyzer();
         foreach (var path in paths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (Workspace.Sources.Any(s => string.Equals(s.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))) continue;
+            if (Workspace.Pages.Any(p => string.Equals(p.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))) continue;
             Status = $"페이지 분석 중: {Path.GetFileName(path)}";
             var document = await analyzer.AnalyzeAsync(path, CancellationToken.None);
-            Workspace.AddSource(SourceDocument.Create(path, document.PageCount), document.Pages);
+            var source = Workspace.Sources.FirstOrDefault(s => string.Equals(s.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) ?? SourceDocument.Create(path, document.PageCount);
+            WorkspaceHistory.Execute("AddSource", workspace => workspace.AddSource(source, document.Pages));
             foreach (var page in Workspace.Pages.Where(p => string.Equals(p.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))) Pages.Add(new(page));
-            _recent.Add(path);
+            _recent.Add(path); var recentPath = Path.GetFullPath(path); for (var i = RecentFiles.Count - 1; i >= 0; i--) if (string.Equals(RecentFiles[i].Path, recentPath, StringComparison.OrdinalIgnoreCase)) RecentFiles.RemoveAt(i); RecentFiles.Insert(0, (recentPath, DateTimeOffset.UtcNow)); while (RecentFiles.Count > 10) RecentFiles.RemoveAt(RecentFiles.Count - 1);
         }
         Status = Pages.Count == 0 ? "PDF를 선택하거나 이 창으로 끌어 놓으세요." : "페이지를 검토한 뒤 변환을 시작하세요.";
         OnPropertyChanged(nameof(PageSummary));
@@ -208,13 +247,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private void NotifyHistory() { OnPropertyChanged(nameof(CanUndo)); OnPropertyChanged(nameof(CanRedo)); }
     private void Refresh() { Pages.Clear(); foreach (var page in Workspace.Pages) Pages.Add(new(page)); OnPropertyChanged(nameof(PageSummary)); NotifyHistory(); }
     public void ValidateOutput() { if (Format == OutputFormat.Hwp) throw new NotSupportedException("HWP 출력은 Hancom adapter 연결 후 활성화됩니다."); OutputPathValidator.ValidateDirectory(OutputDirectory); OutputPathValidator.ValidateFileName(OutputName + ".hwpx"); }
-    public void ExportReport() { if (LastReport is null) { Status = "먼저 변환을 완료하세요."; return; } var path = Path.Combine(OutputDirectory, "PDF2HWP-conversion-report.json"); DiagnosticExport.Write(path, LastReport); Status = "변환 리포트를 저장했습니다: " + path; }
+    private static string ReportPathFor(string outputPath) => Path.Combine(Path.GetDirectoryName(outputPath) ?? ".", Path.GetFileNameWithoutExtension(outputPath) + ".pdf2hwp-report.json");
+    public string SaveReport(ConversionReport report) { var path = ReportPathFor(report.OutputPath); DiagnosticExport.Write(path, report); return path; }
+    public void ExportReport() { if (LastReport is null) { Status = "먼저 변환을 완료하세요."; return; } var path = SaveReport(LastReport); Status = "변환 리포트를 저장했습니다: " + path; }
     public void BeginJob(IReadOnlyList<DocumentPage> snapshot) => _activeSnapshot = snapshot.ToArray();
-    public void RecordHistory(ConversionReport report, ConversionJobStatus status)
+    public void RecordHistory(ConversionReport report, ConversionJobStatus status, string? reportPath = null)
     {
         var mapping = _activeSnapshot.ToDictionary(p => p.Id);
         var pages = report.Pages.Where(p => mapping.ContainsKey(p.StablePageId)).Select(p => mapping[p.StablePageId]).Select(p => new HistoryPageEntry(p.SourcePath, p.SourcePageIndex)).ToArray();
-        _history.Add(new(DateTimeOffset.UtcNow, report.Pages.Select(p => p.SourceDisplayName).Distinct().ToArray(), report.OutputPath, report.SelectedPageCount, report.RenderQuality, report.CompletedAt - report.StartedAt, status, report.AppVersion, pages));
+        _history.Add(new(DateTimeOffset.UtcNow, report.Pages.Select(p => p.SourceDisplayName).Distinct().ToArray(), report.OutputPath, report.SelectedPageCount, report.RenderQuality, report.CompletedAt - report.StartedAt, status, report.AppVersion, pages, ReportPath: reportPath));
         OnPropertyChanged(nameof(History));
     }
     public void RecordOutcome(ConversionJobStatus status)
@@ -228,7 +269,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void OpenHistoryOutput() => OpenHistoryPath(SelectedHistory is { } item && File.Exists(item.OutputPath) ? item.OutputPath : null);
     public void OpenHistoryReport()
     {
-        var path = SelectedHistory is { } item ? Path.Combine(Path.GetDirectoryName(item.OutputPath) ?? "", "PDF2HWP-conversion-report.json") : null;
+        var path = SelectedHistory is { } item ? item.ReportPath ?? ReportPathFor(item.OutputPath) : null;
         OpenHistoryPath(path is not null && File.Exists(path) ? path : null);
     }
     private void OpenHistoryPath(string? path)
@@ -239,6 +280,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public void RemoveHistory() { if (SelectedHistory is null) return; var index = History.ToList().IndexOf(SelectedHistory); _history.RemoveAt(index); SelectedHistory = null; OnPropertyChanged(nameof(History)); }
     public void ClearHistory() { _history.Clear(); SelectedHistory = null; OnPropertyChanged(nameof(History)); Status = "변환 기록을 지웠습니다. 출력 파일은 그대로 유지됩니다."; }
     public void ClearPreviewCache() { try { _thumbnailCache.Clear(); _thumbnailCache.Cleanup(); OnPropertyChanged(nameof(PreviewCacheSummary)); Status = "미리보기 캐시를 지웠습니다."; } catch (Exception ex) { Status = "캐시를 지울 수 없습니다: " + ex.Message; } }
+    public void RemoveRecent(string file) { _recent.Remove(file); var index = -1; for (var i = 0; i < RecentFiles.Count; i++) if (string.Equals(RecentFiles[i].Path, file, StringComparison.OrdinalIgnoreCase)) { index = i; break; } if (index >= 0) RecentFiles.RemoveAt(index); }
     public async Task<bool> PrepareRetryAsync()
     {
         var item = SelectedHistory;
@@ -253,12 +295,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Workspace.Reset(); WorkspaceHistory.Reset(); Pages.Clear();
             var sources = new Dictionary<string, SourceDocument>(StringComparer.OrdinalIgnoreCase);
             foreach (var path in paths) { var source = SourceDocument.Create(path, metadata[path].PageCount); Workspace.AddSource(source, metadata[path].Pages); sources[path] = source; }
+            var metadataPages = Workspace.Pages.ToDictionary(page => (page.SourcePath, page.SourcePageIndex));
             var existing = Workspace.Pages.Select(p => p.Id).ToArray(); if (existing.Length > 0) Workspace.RemovePages(existing);
             foreach (var page in pageReferences)
             {
                 var path = Path.GetFullPath(page.SourcePath); var source = sources[path];
                 if (page.SourcePageIndex < 0 || page.SourcePageIndex >= source.PageCount) throw new InvalidDataException("이력의 페이지 정보가 원본 PDF와 맞지 않습니다.");
-                Workspace.Apply(new InsertPage(DocumentPage.FromSource(source, page.SourcePageIndex), Workspace.Pages.Count));
+                var sourcePage = metadataPages[(path, page.SourcePageIndex)];
+                Workspace.Apply(new InsertPage(sourcePage with { Id = Guid.NewGuid(), LogicalOutputIndex = Workspace.Pages.Count, OperationHistory = ["Source", "Retry"] }, Workspace.Pages.Count));
             }
             Refresh(); OutputDirectory = Path.GetDirectoryName(item.OutputPath) ?? OutputDirectory;
             Status = "기록을 복원했습니다. 새 변환 작업으로 재시도합니다."; return true;

@@ -27,9 +27,12 @@ dotnet publish src/Pdf2Hwp.App/Pdf2Hwp.App.csproj -p:PublishProfile=win-x64-sing
 |---|---|---|---|
 | PdfPig | positioned text/glyph extraction | Apache-2.0 | Adopted |
 | PDFtoImage | PDFium page rasterization | MIT | Adopted, renderer serialized |
-| PDFium native component | rasterization engine | BSD-style (upstream) | Must retain notices and verify shipped binary provenance |
+| bblanchon.PDFium.Win32 152.0.7961 | Native Windows PDF renderer, transitive through PDFtoImage | Apache-2.0 package expression; native binary has separate upstream obligations | DLL matches the attested official release; original upstream and component notices are included under `licenses/third-party/` |
+| PDFium upstream | Native rendering engine compiled into `pdfium.dll` | BSD-3-Clause terms plus the exact release's component notices | Binary provenance and notice set verified for this resolved version; see `THIRD_PARTY_NOTICES.md` |
 
 Avoided: MuPDF/Ghostscript and iText community paths because AGPL creates distribution obligations unsuitable for an unreviewed proprietary deployment.
+
+`eng/publish-win-x64.ps1` keeps `PDF2HWP.exe` single-file and packages `THIRD_PARTY_NOTICES.md` plus verified original license/notice texts beside it. Run `eng/verify-license-assets.ps1` to check the dependency versions, PDFium attestation and hashes, signatures, and publish-package contents.
 
 ## Important risks / next work
 
@@ -43,10 +46,13 @@ The HWPX writer supports page geometry, embedded images, and page-background ima
 
 - Restore: PASS
 - Build: PASS
-- Test: 88 / 88 PASS
+- Test: 106 / 106 PASS, 0 skipped (canonical verification on 2026-09-28)
 - Windows x64 self-contained single-file publish: PASS
+- Published EXE WPF main-window startup and graceful-close smoke: PASS (repository-local test data)
 - Visual Fidelity regression tests: PASS
 - Page-background semantic regression: PASS
+- 100-page PDFium thumbnail batch: PASS
+- Visual Fidelity production job with CropBox/rotation, duplicate raster reuse, and multi-section package validation: PASS
 
 ### Current verified baseline
 
@@ -65,10 +71,6 @@ The HWPX writer supports page geometry, embedded images, and page-background ima
 ### Pending validation
 
 - Hancom Office 2024 manual validation of the 3-page Visual Fidelity sample
-- Final self-contained EXE startup verification in a Windows Application Control-permitted environment
-- Full 100-page thumbnail batch execution
-- Raster render dedup integration into the final conversion pipeline
-- Additional UI/history retry automation coverage
 - Landscape and mixed-orientation Visual Fidelity validation
 - OCR / Editable / Safe Hybrid modes
 - HWP binary export

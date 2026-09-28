@@ -6,9 +6,9 @@ public enum ValidationStatus { Pass, Warning, Fail }
 
 public sealed record PdfRect(double Left, double Bottom, double Width, double Height);
 public sealed record PdfGlyph(string Text, string FontName, double FontSize, PdfRect Bounds);
-public sealed record PdfPageInfo(int Number, double WidthPoints, double HeightPoints, int Rotation, PdfRect? CropBox, bool HasText, bool RequiresOcr, IReadOnlyList<PdfGlyph> Glyphs);
+public sealed record PdfPageInfo(int Number, double WidthPoints, double HeightPoints, int Rotation, PdfRect? CropBox, bool HasText, bool RequiresOcr, IReadOnlyList<PdfGlyph> Glyphs, PdfRect? MediaBox = null);
 public sealed record PdfDocumentInfo(string SourcePath, int PageCount, IReadOnlyList<PdfPageInfo> Pages);
-public sealed record RenderRequest(string SourcePath, int PageNumber, string OutputPngPath, int Dpi, int? Width = null, int? Height = null, int RotationDegrees = 0);
+public sealed record RenderRequest(string SourcePath, int PageNumber, string OutputPngPath, int Dpi, int? Width = null, int? Height = null, int RotationDegrees = 0, PdfRect? CropBox = null, int IntrinsicRotationDegrees = 0);
 public sealed record ValidationIssue(ValidationStatus Status, int? PageNumber, string Code, string Message);
 public sealed record ValidationReport(ValidationStatus Status, IReadOnlyList<ValidationIssue> Issues);
 

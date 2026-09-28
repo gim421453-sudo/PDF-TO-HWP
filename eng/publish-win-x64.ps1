@@ -11,4 +11,24 @@ if (-not (Test-Path $expected)) {
     if (Test-Path $legacy) { Copy-Item $legacy $expected -Force }
 }
 if (-not (Test-Path $expected)) { throw 'Publish output executable PDF2HWP.exe was not created.' }
-Get-Item $expected | Select-Object FullName,Length
+$noticeSource = Join-Path $root 'THIRD_PARTY_NOTICES.md'
+$licensesSource = Join-Path $root 'licenses\third-party'
+if (-not (Test-Path $noticeSource -PathType Leaf)) { throw 'THIRD_PARTY_NOTICES.md is required for a redistributable package.' }
+if (-not (Test-Path $licensesSource -PathType Container)) { throw 'The original third-party license bundle is missing.' }
+Copy-Item -LiteralPath $noticeSource -Destination (Join-Path $out 'THIRD_PARTY_NOTICES.md') -Force
+$licenseOutput = Join-Path $out 'licenses\third-party'
+New-Item -ItemType Directory -Force -Path $licenseOutput | Out-Null
+Copy-Item -Path (Join-Path $licensesSource '*') -Destination $licenseOutput -Recurse -Force
+$requiredNotices = @(
+    'licenses\third-party\PDFium\152.0.7961\LICENSE',
+    'licenses\third-party\PDFium\152.0.7961\licenses\abseil.txt',
+    'licenses\third-party\PDFium\152.0.7961\licenses\pdfium.txt',
+    'licenses\third-party\SkiaSharp\4.150.1\THIRD-PARTY-NOTICES.txt',
+    'licenses\third-party\Microsoft.NETCore.App.Runtime.win-x64\8.0.27\THIRD-PARTY-NOTICES.TXT'
+)
+foreach ($relativePath in $requiredNotices) {
+    if (-not (Test-Path (Join-Path $out $relativePath) -PathType Leaf)) {
+        throw "Required license/notice file was not packaged: $relativePath"
+    }
+}
+Get-Item $expected,(Join-Path $out 'THIRD_PARTY_NOTICES.md') | Select-Object FullName,Length
