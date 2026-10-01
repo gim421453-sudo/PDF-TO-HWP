@@ -1,0 +1,11 @@
+PDF2HWP forensic recovery — initial untracked-file inventory
+Captured before recovery-doc creation. All files were in .local-verification-20260927 and came from a prior attempted repository-local SDK isolation setup.
+
+1. .local-verification-20260927/.keep — 17 bytes; marker text `temporary marker`.
+2. .local-verification-20260927/canonical/.keep — 42 bytes; marker text `precreated repository-local output folder`.
+3. .local-verification-20260927/cli-home/.dotnet/tools/.keep — 45 bytes; marker text `precreated repository-local CLI state folder`.
+4. .local-verification-20260927/nuget-http-cache/.keep — 39 bytes; marker text `precreated repository-local HTTP cache`.
+5. .local-verification-20260927/nuget-packages/.keep — 42 bytes; marker text `precreated repository-local package cache`.
+6. .local-verification-20260927/nuget-plugins-cache/.keep — 41 bytes; marker text `precreated repository-local plugin cache`.
+
+HEAD versions: none (untracked). Role: empty/marker-only scratch layout; no application code or project data. Classification: GENERATED_NOISE. No file was removed. Decision: preserve and document; later add a narrowly scoped ignore rule so it cannot be mistaken for deliverable content. Verification: inspect status, file list, and ignore behavior after recovery.

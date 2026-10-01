@@ -1,0 +1,24 @@
+PDF2HWP forensic recovery — initial status snapshot
+Captured: 2026-09-27 (Asia/Seoul; time not independently sourced)
+Repository root: C:/dev/Hwp
+Branch: main
+HEAD: dcea1905f2b4eb17bb3e45ec4758519fe9ba1371
+HEAD subject: chore: add cross-device handoff and documentation automation
+Origin: https://github.com/gim421453-sudo/PDF-TO-HWP.git (read-only inspection; no network operation)
+
+Initial `git status --short --branch`:
+## main...origin/main
+ M src/Pdf2Hwp.App/MainWindow.xaml.cs
+ M src/Pdf2Hwp.Core/ApplicationContracts.cs
+ M src/Pdf2Hwp.Infrastructure/ConversionJobService.cs
+ M tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs
+?? .local-verification-20260927/
+
+Initial changed tracked files: 4 (unstaged 4, staged 0)
+Initial untracked files: 6 (all under .local-verification-20260927; see 03_UNTRACKED_FILES.txt)
+Initial deleted/renamed tracked files: 0
+Initial `git diff --stat HEAD`: 4 files changed, 38 insertions(+), 6 deletions(-)
+Initial `git diff --check`: exit 0; Git emitted line-ending normalization warnings only.
+Initial `git diff --cached`: empty.
+
+The exact tracked diff at capture time is preserved in 04_INITIAL_DIFF.patch. This snapshot predates creation of the docs/recovery audit files. No Git mutation command was used.

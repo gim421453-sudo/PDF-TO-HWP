@@ -1,0 +1,121 @@
+diff --git a/src/Pdf2Hwp.App/MainWindow.xaml.cs b/src/Pdf2Hwp.App/MainWindow.xaml.cs
+index d45bc08..5c9f56e 100644
+--- a/src/Pdf2Hwp.App/MainWindow.xaml.cs
++++ b/src/Pdf2Hwp.App/MainWindow.xaml.cs
+@@ -52,9 +52,20 @@ public partial class MainWindow : Window
+             _viewModel.BeginJob(jobSnapshot);
+             var result = await service.RunAsync(jobSnapshot, _viewModel.OutputDirectory, _viewModel.RenderQuality, progress, _cancellation.Token, _viewModel.OutputName);
+             _viewModel.LastReport = result.Report;
+-            _viewModel.RecordHistory(result.Report, result.Report.Validation.Status == ValidationStatus.Fail ? ConversionJobStatus.Failed : ConversionJobStatus.Completed);
++            var finalStatus = result.Report.Validation.Status switch
++            {
++                ValidationStatus.Pass => ConversionJobStatus.Completed,
++                ValidationStatus.Warning => ConversionJobStatus.CompletedWithWarnings,
++                _ => ConversionJobStatus.Failed
++            };
++            _viewModel.RecordHistory(result.Report, finalStatus);
+             _viewModel.ReportSummary = $"완료: {result.OutputFiles.Count}개 · 검증 {result.Report.Validation.Status}";
+-            _viewModel.Status = result.Report.Warnings.Count == 0 ? "완료: 패키지 검증 PASS" : "완료: 경고가 있는 결과입니다.";
++            _viewModel.Status = result.Report.Validation.Status switch
++            {
++                ValidationStatus.Pass => "완료: 패키지 검증 PASS",
++                ValidationStatus.Warning => "경고: 검증 주의사항을 확인하세요.",
++                _ => "실패: 검증을 통과하지 못했습니다."
++            };
+             _viewModel.Progress = 100;
+         }
+         catch (OperationCanceledException) { _viewModel.RecordOutcome(ConversionJobStatus.Cancelled); _viewModel.Status = "취소됨"; }
+diff --git a/src/Pdf2Hwp.Core/ApplicationContracts.cs b/src/Pdf2Hwp.Core/ApplicationContracts.cs
+index b521a69..b3ce25c 100644
+--- a/src/Pdf2Hwp.Core/ApplicationContracts.cs
++++ b/src/Pdf2Hwp.Core/ApplicationContracts.cs
+@@ -2,7 +2,7 @@ using System.Security.Cryptography;
+ 
+ namespace Pdf2Hwp.Core;
+ 
+-public enum ConversionJobStatus { Queued, Analyzing, Rendering, Writing, Validating, Completed, Cancelled, Failed }
++public enum ConversionJobStatus { Queued, Analyzing, Rendering, Writing, Validating, Completed, Cancelled, Failed, CompletedWithWarnings }
+ public enum RenderQuality { Standard = 200, High = 300 }
+ public sealed record ConversionProgress(ConversionJobStatus Status, string Stage, int Current, int Total, double Percentage);
+ public sealed record ConversionJob(Guid Id, DateTimeOffset CreatedAt, IReadOnlyList<DocumentPage> Pages, RenderQuality Quality, string OutputPath, ConversionJobStatus Status = ConversionJobStatus.Queued);
+@@ -45,7 +45,7 @@ public sealed record ConversionHistoryEntry(DateTimeOffset Timestamp, IReadOnlyL
+ {
+     public string OutputFileName => Path.GetFileName(OutputPath);
+     public string Summary => $"{Timestamp.ToLocalTime():yyyy-MM-dd HH:mm} · {SourceDisplayNames.Count} PDF · {PageCount}쪽 · {Duration.TotalSeconds:0.0}s";
+-    public string StatusLabel => Status switch { ConversionJobStatus.Completed => "완료", ConversionJobStatus.Cancelled => "취소", ConversionJobStatus.Failed => "실패", _ => Status.ToString() };
++    public string StatusLabel => Status switch { ConversionJobStatus.Completed => "완료", ConversionJobStatus.CompletedWithWarnings => "경고", ConversionJobStatus.Cancelled => "취소", ConversionJobStatus.Failed => "실패", _ => Status.ToString() };
+     public bool CanRetry => Status is ConversionJobStatus.Failed or ConversionJobStatus.Cancelled && Pages is { Count: > 0 } && Pages.All(p => File.Exists(p.SourcePath));
+ }
+ public sealed class ConversionHistoryStore(string path, int maxEntries = 20)
+diff --git a/src/Pdf2Hwp.Infrastructure/ConversionJobService.cs b/src/Pdf2Hwp.Infrastructure/ConversionJobService.cs
+index 22f8aee..e7c0a74 100644
+--- a/src/Pdf2Hwp.Infrastructure/ConversionJobService.cs
++++ b/src/Pdf2Hwp.Infrastructure/ConversionJobService.cs
+@@ -32,6 +32,7 @@ public sealed class ConversionJobService(
+         var started = DateTimeOffset.UtcNow;
+         var totalWatch = Stopwatch.StartNew(); var analyzeDuration = TimeSpan.Zero; var writeDuration = TimeSpan.Zero; var validateDuration = TimeSpan.Zero; var publishDuration = TimeSpan.Zero;
+         var outputs = new List<string>();
++        var validations = new List<ValidationReport>();
+         var pageReports = new List<PageConversionReport>();
+         var warnings = new List<string>();
+         var sourcePaths = snapshot.Select(p => p.SourcePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+@@ -67,6 +68,7 @@ public sealed class ConversionJobService(
+             validateDuration += validateWatch.Elapsed;
+             if (validation.Status == ValidationStatus.Fail)
+                 throw new InvalidDataException(string.Join("; ", validation.Issues.Select(i => i.Message)));
++            validations.Add(validation);
+             var publishWatch = Stopwatch.StartNew(); File.Move(temporary, target, false); publishDuration += publishWatch.Elapsed;
+             outputs.Add(target);
+             foreach (var page in snapshot)
+@@ -75,14 +77,16 @@ public sealed class ConversionJobService(
+         }
+         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+-        progress?.Report(new(ConversionJobStatus.Completed, "완료", 1, 1, 100));
+         var outputPath = outputs.Count == 1 ? outputs[0] : outputDirectory;
+-        var validationReport = outputs.Select(inspector.Inspect).Aggregate(
++        var validationReport = validations.Aggregate(
+             new ValidationReport(ValidationStatus.Pass, []),
+             (current, next) => new(
+                 current.Status == ValidationStatus.Fail || next.Status == ValidationStatus.Fail ? ValidationStatus.Fail :
+                     current.Status == ValidationStatus.Warning || next.Status == ValidationStatus.Warning ? ValidationStatus.Warning : ValidationStatus.Pass,
+                 current.Issues.Concat(next.Issues).ToArray()));
++        warnings.AddRange(validationReport.Issues.Where(issue => issue.Status == ValidationStatus.Warning).Select(issue => issue.Message));
++        var hasValidationWarnings = validationReport.Status == ValidationStatus.Warning;
++        progress?.Report(new(hasValidationWarnings ? ConversionJobStatus.CompletedWithWarnings : ConversionJobStatus.Completed, hasValidationWarnings ? "경고" : "완료", 1, 1, 100));
+         totalWatch.Stop();
+         return new ConversionJobResult(new(
+diff --git a/tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs b/tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs
+index 7ee7ac9..b18cb9c 100644
+--- a/tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs
++++ b/tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs
+@@ -80,6 +80,22 @@ public sealed class ConversionJobServiceTests
+         Assert.False(File.Exists(Path.Combine(d.Path, "invalid.hwpx"))); Assert.Empty(Directory.GetFiles(d.Path, "*.partial-*"));
+     }
+ 
++    [Fact]
++    public async Task Warning_validation_is_reported_as_warning_not_pass()
++    {
++        using var d = new TempDirectory(); var source = Path.Combine(d.Path, "source.pdf"); File.WriteAllText(source, "placeholder"); var page = DocumentPage.FromSource(SourceDocument.Create(source, 1), 0);
++        var progress = new ProgressRecorder(); var warning = new ValidationIssue(ValidationStatus.Warning, 1, "test-warning", "visual review required");
++        var service = new ConversionJobService(new FakeAnalyzer(), new FakeWriter(), new WarningInspector(warning));
++        var result = await service.RunAsync([page], d.Path, RenderQuality.Standard, progress, CancellationToken.None, "warning");
++        Assert.Equal(ValidationStatus.Warning, result.Report.Validation.Status);
++        Assert.Contains("visual review required", result.Report.Warnings);
++        Assert.Contains(progress.Events, item => item.Status == ConversionJobStatus.CompletedWithWarnings);
++        var history = new ConversionHistoryEntry(DateTimeOffset.UtcNow, ["source.pdf"], result.Report.OutputPath, 1, RenderQuality.Standard, TimeSpan.Zero, ConversionJobStatus.CompletedWithWarnings, "0.1.0");
++        Assert.Equal("경고", history.StatusLabel);
++        Assert.Equal(6, (int)ConversionJobStatus.Cancelled); Assert.Equal(7, (int)ConversionJobStatus.Failed); Assert.Equal(8, (int)ConversionJobStatus.CompletedWithWarnings);
++        Assert.True(File.Exists(Path.Combine(d.Path, "warning.hwpx")));
++    }
+ 
+     [Fact]
+     public async Task Progress_uses_logical_page_count_including_duplicates()
+     {
+@@ -112,6 +128,7 @@ public sealed class ConversionJobServiceTests
+     }
+     private sealed class FakeInspector : IHwpxPackageInspector { public ValidationReport Inspect(string path) => new(ValidationStatus.Pass, []); }
+     private sealed class FailingInspector : IHwpxPackageInspector { public ValidationReport Inspect(string path) => new(ValidationStatus.Fail, [new ValidationIssue(ValidationStatus.Fail, null, "test", "invalid package")]); }
++    private sealed class WarningInspector(ValidationIssue warning) : IHwpxPackageInspector { public ValidationReport Inspect(string path) => new(ValidationStatus.Warning, [warning]); }
+     private sealed class ProgressRecorder : IProgress<ConversionProgress> { public List<ConversionProgress> Events { get; } = []; public void Report(ConversionProgress value) => Events.Add(value); }
+     private sealed class TempDirectory : IDisposable { public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N")); public TempDirectory() => Directory.CreateDirectory(Path); public void Dispose() { try { Directory.Delete(Path, true); } catch { } }
+ }

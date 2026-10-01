@@ -1,0 +1,13 @@
+PDF2HWP forensic recovery — initial changed-file inventory
+Baseline HEAD: dcea1905f2b4eb17bb3e45ec4758519fe9ba1371
+
+Tracked changes vs HEAD (all Modified, HEAD version exists, unstaged):
+1. src/Pdf2Hwp.App/MainWindow.xaml.cs — +13/-2 lines. Validation status now maps PASS/WARNING/other distinctly to history and UI status.
+2. src/Pdf2Hwp.Core/ApplicationContracts.cs — +2/-2 lines. Appends CompletedWithWarnings and adds its history label.
+3. src/Pdf2Hwp.Infrastructure/ConversionJobService.cs — +6/-2 lines. Retains per-output validation reports, aggregates warnings, and emits warning progress.
+4. tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs — +17/-0 lines. Adds a warning validation propagation regression test and fake inspector.
+
+Staged changes: none.
+Deleted/renamed files: none.
+Untracked content at capture: six files under .local-verification-20260927; inventory and contents are in 03_UNTRACKED_FILES.txt.
+Diff details: 04_INITIAL_DIFF.patch.
