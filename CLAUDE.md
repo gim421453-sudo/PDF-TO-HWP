@@ -52,3 +52,13 @@
 - 의미 있는 작업을 끝내면 `docs/handoff/CURRENT_HANDOFF.md` 를 **기존 형식 그대로** 갱신한다. 새 내용은 맨 위 최신 섹션에 쓰고, 해결된 과거 내용은 정리한다.
 - **AGENTS.md 동기화 (사용자가 중단 지시하기 전까지 유지)**: 명령어, 폴더 구조, 규칙, 주의사항 같은 프로젝트 사실이 바뀌면 같은 변경을 `AGENTS.md` 에도 반영한다. 기존 내용과 형식은 보존하고 필요한 부분만 최소 수정한다. Codex 전용 문구는 임의로 지우지 않는다. `AGENTS.md` 가 없으면 만들지 말고 사용자에게 묻는다.
 - `CHANGELOG.md` 가 있으면 사용자에게 보이는 변경만 기록한다. `DEVLOG_AUTO_UPDATE=false` 이면 개발일지를 만들지 않는다.
+
+## 에이전트 승계 (agent-sync)
+
+- 하위 작업 하나가 끝날 때마다 `.agent-sync/NEXT.md` 를 갱신한다 (방금 한 일 / 다음에 할 일 / 막힌 것 / 건드리지 말 것 / 검증 상태). 이 파일은 git 추적 대상이 아니다.
+- 한도 소진으로 내가 멈추면 Codex 가 이어받는다. '다음에 할 일' 은 Codex 가 그대로 실행할 수 있을 만큼 구체적으로 쓴다 (파일 경로, 함수 이름, 실행할 명령).
+- 세션을 시작할 때 `.agent-sync/state.json` 의 `phase` 를 본다.
+  - `codex_running`: 파일을 수정하거나 테스트/빌드를 실행하지 말고 사용자에게 알린다.
+  - `codex_done` 또는 `codex_failed`: 작업 전에 `git status`, `git diff`, Codex 로그와 `.agent-sync/NEXT.md` 를 읽고 Codex 가 바꾼 내용부터 파악한다.
+- 마일스톤마다 `docs/handoff/CURRENT_HANDOFF.md` 를 갱신한다 (기존 규칙 유지).
+- git add / commit / pull / push 는 사용자가 요청할 때만 한다 (기존 규칙 유지).
