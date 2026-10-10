@@ -47,6 +47,15 @@ public sealed class RecentFilesStore(string path, int maxEntries = 10)
 }
 
 public sealed record HistoryPageEntry(string SourcePath, int SourcePageIndex);
+public sealed class ConversionAttemptSnapshot
+{
+    private IReadOnlyList<DocumentPage> _pages = [];
+    public IReadOnlyList<DocumentPage> Pages => _pages;
+    public void StartAttempt() => _pages = [];
+    public void BeginJob(IReadOnlyList<DocumentPage> pages) => _pages = pages.ToArray();
+    public void EndAttempt() => _pages = [];
+}
+
 public sealed record ConversionHistoryEntry(DateTimeOffset Timestamp, IReadOnlyList<string> SourceDisplayNames, string OutputPath, int PageCount, RenderQuality RenderQuality, TimeSpan Duration, ConversionJobStatus Status, string AppVersion, IReadOnlyList<HistoryPageEntry>? Pages = null, int SchemaVersion = 1, string? ReportPath = null)
 {
     public string OutputFileName => Path.GetFileName(OutputPath);
