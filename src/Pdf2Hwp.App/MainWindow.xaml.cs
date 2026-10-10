@@ -77,8 +77,17 @@ public partial class MainWindow : Window
         finally { _cancellation?.Dispose(); _cancellation = null; _viewModel.EndConversionAttempt(); }
     }
     private void Cancel(object sender, RoutedEventArgs e) { _cancellation?.Cancel(); }
-    private void OpenResults(object sender, RoutedEventArgs e) { if (Directory.Exists(_viewModel.OutputDirectory)) Process.Start(new ProcessStartInfo("explorer.exe", _viewModel.OutputDirectory) { UseShellExecute = true }); }
-    private void ExportReport(object sender, RoutedEventArgs e) { _viewModel.ExportReport(); }
+    private void OpenResults(object sender, RoutedEventArgs e) => RunUiAction(() =>
+    {
+        if (!Directory.Exists(_viewModel.OutputDirectory)) { _viewModel.Status = "출력 폴더를 찾을 수 없습니다."; return; }
+        Process.Start(new ProcessStartInfo("explorer.exe", _viewModel.OutputDirectory) { UseShellExecute = true });
+    }, "결과 폴더를 열지 못했습니다: ");
+    private void ExportReport(object sender, RoutedEventArgs e) => RunUiAction(_viewModel.ExportReport, "보고서를 저장하지 못했습니다: ");
+    private void RunUiAction(Action action, string failurePrefix)
+    {
+        var error = UserOperationGuard.CaptureError(action);
+        if (error is not null) _viewModel.Status = failurePrefix + error;
+    }
     private ConversionHistoryEntry? SelectedHistory => _viewModel.SelectedHistory;
     private void HistoryOpenFolder(object sender, RoutedEventArgs e) => _viewModel.OpenHistoryFolder();
     private void HistoryOpenOutput(object sender, RoutedEventArgs e) => _viewModel.OpenHistoryOutput();
@@ -99,7 +108,7 @@ public partial class MainWindow : Window
         finally { _retryPreparing = false; }
     }
     private void ClearPreviewCache(object sender, RoutedEventArgs e) { _viewModel.ClearPreviewCache(); }
-    private void OpenDiagnostics(object sender, RoutedEventArgs e) { _viewModel.ExportDiagnostics(); }
+    private void OpenDiagnostics(object sender, RoutedEventArgs e) => RunUiAction(_viewModel.ExportDiagnostics, "진단 파일을 저장하지 못했습니다: ");
     private void Undo(object sender, RoutedEventArgs e) { _viewModel.Undo(); PageList.SelectedItems.Clear(); }
     private void Redo(object sender, RoutedEventArgs e) { _viewModel.Redo(); PageList.SelectedItems.Clear(); }
     private void OpenSettings(object sender, RoutedEventArgs e)
