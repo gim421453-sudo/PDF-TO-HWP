@@ -44,6 +44,7 @@ public partial class MainWindow : Window
         if (_cancellation is not null || _retryPreparing) return;
         try
         {
+            _viewModel.StartConversionAttempt();
             _viewModel.ValidateOutput();
             _cancellation = new CancellationTokenSource();
             var progress = new Progress<ConversionProgress>(p => { _viewModel.Progress = p.Percentage; _viewModel.Status = $"{p.Stage} ({p.Current}/{p.Total})"; });
@@ -73,7 +74,7 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) { _viewModel.RecordOutcome(ConversionJobStatus.Cancelled); _viewModel.Status = "취소됨"; }
         catch (Exception ex) { _viewModel.RecordOutcome(ConversionJobStatus.Failed); _viewModel.Status = "실패: " + ConversionErrorMapper.ToUserMessage(ex); }
-        finally { _cancellation?.Dispose(); _cancellation = null; }
+        finally { _cancellation?.Dispose(); _cancellation = null; _viewModel.EndConversionAttempt(); }
     }
     private void Cancel(object sender, RoutedEventArgs e) { _cancellation?.Cancel(); }
     private void OpenResults(object sender, RoutedEventArgs e) { if (Directory.Exists(_viewModel.OutputDirectory)) Process.Start(new ProcessStartInfo("explorer.exe", _viewModel.OutputDirectory) { UseShellExecute = true }); }
@@ -167,7 +168,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly PreviewThumbnailCache _thumbnailCache = new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PDF2HWP", "Cache", "Preview"));
     private readonly CachedPreviewThumbnailRenderer _thumbnailRenderer;
     private readonly Dictionary<Guid, CancellationTokenSource> _previewRequests = [];
-    private IReadOnlyList<DocumentPage> _activeSnapshot = [];
+    private readonly ConversionAttemptSnapshot _activeAttempt = new();
     public DocumentWorkspace Workspace { get; } = new();
     private WorkspaceHistory WorkspaceHistory { get; }
     public ObservableCollection<PageViewModel> Pages { get; } = [];
@@ -250,18 +251,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private static string ReportPathFor(string outputPath) => Path.Combine(Path.GetDirectoryName(outputPath) ?? ".", Path.GetFileNameWithoutExtension(outputPath) + ".pdf2hwp-report.json");
     public string SaveReport(ConversionReport report) { var path = ReportPathFor(report.OutputPath); DiagnosticExport.Write(path, report); return path; }
     public void ExportReport() { if (LastReport is null) { Status = "먼저 변환을 완료하세요."; return; } var path = SaveReport(LastReport); Status = "변환 리포트를 저장했습니다: " + path; }
-    public void BeginJob(IReadOnlyList<DocumentPage> snapshot) => _activeSnapshot = snapshot.ToArray();
+    public void StartConversionAttempt() => _activeAttempt.StartAttempt();
+    public void BeginJob(IReadOnlyList<DocumentPage> snapshot) => _activeAttempt.BeginJob(snapshot);
+    public void EndConversionAttempt() => _activeAttempt.EndAttempt();
     public void RecordHistory(ConversionReport report, ConversionJobStatus status, string? reportPath = null)
     {
-        var mapping = _activeSnapshot.ToDictionary(p => p.Id);
+        var mapping = _activeAttempt.Pages.ToDictionary(p => p.Id);
         var pages = report.Pages.Where(p => mapping.ContainsKey(p.StablePageId)).Select(p => mapping[p.StablePageId]).Select(p => new HistoryPageEntry(p.SourcePath, p.SourcePageIndex)).ToArray();
         _history.Add(new(DateTimeOffset.UtcNow, report.Pages.Select(p => p.SourceDisplayName).Distinct().ToArray(), report.OutputPath, report.SelectedPageCount, report.RenderQuality, report.CompletedAt - report.StartedAt, status, report.AppVersion, pages, ReportPath: reportPath));
         OnPropertyChanged(nameof(History));
     }
     public void RecordOutcome(ConversionJobStatus status)
     {
-        if (_activeSnapshot.Count == 0) return;
-        _history.Add(new(DateTimeOffset.UtcNow, _activeSnapshot.Select(p => Path.GetFileName(p.SourcePath)).Distinct().ToArray(), Path.Combine(OutputDirectory, "PDF2HWP_combined.hwpx"), _activeSnapshot.Count, RenderQuality, TimeSpan.Zero, status, "0.1.0", _activeSnapshot.Select(p => new HistoryPageEntry(p.SourcePath, p.SourcePageIndex)).ToArray()));
+        if (_activeAttempt.Pages.Count == 0) return;
+        _history.Add(new(DateTimeOffset.UtcNow, _activeAttempt.Pages.Select(p => Path.GetFileName(p.SourcePath)).Distinct().ToArray(), Path.Combine(OutputDirectory, "PDF2HWP_combined.hwpx"), _activeAttempt.Pages.Count, RenderQuality, TimeSpan.Zero, status, "0.1.0", _activeAttempt.Pages.Select(p => new HistoryPageEntry(p.SourcePath, p.SourcePageIndex)).ToArray()));
         OnPropertyChanged(nameof(History));
     }
     public void ExportDiagnostics() { var path = Path.Combine(OutputDirectory, "PDF2HWP-diagnostics.json"); var cache = _thumbnailCache.Statistics; var size = _thumbnailCache.Measure(); DiagnosticExport.Write(path, new { app = "PDF2HWP", pages = Pages.Count, included = Pages.Count(p => p.Included), status = Status, renderQuality = RenderQuality.ToString(), renderer = "PDFium preview", cacheRoot = _thumbnailCache.Root, cacheHits = cache.Hits, cacheMisses = cache.Misses, cacheEntries = size.Entries, cacheBytes = size.Bytes, historyCount = History.Count, timestamp = DateTimeOffset.UtcNow }); Status = "진단 파일을 저장했습니다: " + path; }
