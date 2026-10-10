@@ -1,69 +1,51 @@
 # Current Project Handoff
 
-Last updated: 2026-09-28 (Asia/Seoul)
-Status: LICENSE_COMPLIANCE_VERIFIED / COMMITTED; pre-release development
+Last updated: 2026-10-10 (Asia/Seoul)
+Status: DOCUMENTATION_UPDATED / READY_WITH_WARNINGS
 
 ## Project and architecture
 
-- PDF2HWP is a Windows x64 WPF desktop application targeting .NET 8 for PDF-to-HWPX conversion; HWP binary output remains a separate Hancom adapter boundary.
-- Solution: `PDF2HWP.sln`. Core defines contracts/domain; Infrastructure contains PdfPig analysis, PDFtoImage/PDFium rendering, conversion orchestration, HWPX writing/inspection; App is WPF; Tests is xUnit.
-- The supported UI path is Visual Fidelity. Safe Hybrid, Editable, OCR and PDF-vs-output visual comparison remain unsupported and are disabled/labeled in the UI.
+- 저장소: PDF2HWP (노트북 PDF-TO-HWP), Codex 담당.
+- PDF를 HWPX로 변환하는 Windows x64 WPF 데스크톱 앱이며 .NET 8 솔루션은 `PDF2HWP.sln`이다. Core / Infrastructure / App / Tests 구조를 사용하고 HWP 바이너리 출력은 별도 한컴 어댑터 경계로 분리한다.
+- 지원 변환 경로는 Visual Fidelity다. Safe Hybrid, Editable, OCR, PDF 대 출력물 시각 비교, HWP 바이너리 내보내기는 의도적으로 미구현이며 비활성 상태다.
 
-## Current session
+## 현재 세션 (2026-10-10)
 
-Objective: audit actual redistributed dependencies and notices, verify PDFium provenance, rerun canonical validation and publish, and commit the verified work. Functional source changes from the prior repair were preserved; this session made no feature-code changes.
+목표: 고정 담당표에 따라 저장소 OWNER를 확인하고, 저장소 지침과 인계 문서를 현재 Git 상태 기준으로 정비한다.
 
-- Baseline branch/HEAD: `main` / `dcea1905f2b4eb17bb3e45ec4758519fe9ba1371`.
-- WPF production conversion now calls `VisualFidelityConverter`, job-scoped raster cache and HWPX page-background resources; unsupported mode/verification controls are disabled.
-- PDF MediaBox/CropBox/rotation are preserved through analysis, workspace and PDFium raster rendering. Cancellation is checked after validation/reopen and before final non-overwriting publish.
-- Retry/workspace reentry, preview shared-cancellation, re-add-after-empty, report path association, settings/recent actions, corrupt-state preservation and tautological pipeline tests were addressed with regression coverage.
-- `docs/recovery/` forensic records are pre-existing untracked user data and remain untouched. Golden files and sample #23 remain unchanged.
+- 완료: `AGENTS.md` 맨 위에 OWNER/고정 담당표/공통 규칙/연동 규칙을 추가하고 현재 상태 요약을 반영했다. Claude의 쓰기 및 지정 Git 명령을 차단하는 `.claude/settings.json`을 생성했다. 기존 `CLAUDE.md`의 `@AGENTS.md` import는 이미 정상이라 변경하지 않았다.
+- 연동: 연동 메모 중 이 저장소 항목이 없어 `docs/integration.md`는 만들지 않았다.
+- 파일 분류: 작업 시작 시 변경·미추적 파일은 없었다. 이번 작업에서 수정한 `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`와 새 `.claude/settings.json`은 모두 커밋 대상으로 분류한다. `.gitignore` 대상이나 사용자 확인 필요 파일은 확인되지 않았다.
+- 결정: 구체적인 5단계의 명시적 요청에 따라 Claude 차단 설정을 만들었다. 8단계의 포괄적인 설정 변경 금지와 충돌하는 경우 구체적인 파일 생성 지시를 우선 적용했다.
+- 변경 전 상태: `main` / `f13fea5e56a9f69e628ad2b4e7831b7ced3f7265`; `main`은 `origin/main`과 일치했고 작업 트리는 깨끗했다. 최근 로그는 `f13fea5 connect`, `7a715cd CLAUDE`, `ca66318 11`, `a193197 docs: finalize PDF2HWP handoff after compliance commit`, `cd7ced4 fix: harden PDF2HWP production conversion pipeline`이다.
+- 검증: 문서/설정 편집 후 `git diff --check`는 통과했다(LF/CRLF 정규화 경고만 표시). 설정 JSON 파싱도 통과했다. 빌드/테스트는 실행하지 않았다.
 
-## Redistribution audit (2026-09-28)
+## 직전 검증 및 보존할 기록
 
-- Verified chain: `Pdf2Hwp.Infrastructure` direct reference `PDFtoImage 5.4.0` -> transitive `bblanchon.PDFium.Win32 152.0.7961` -> `runtimes/win-x64/native/pdfium.dll`. NuGet, official release archive, and project Release DLL SHA-256 all match (`D3D9F4B7C9DABE3363F30779C5C3C715C47332749FA590E4B4A2B8B6780CB1C4`). Release archive hash (`88276459349B291C41F10422DAD0210F007C04D919C8FA56472B6B7C6406ADF4`) matches its GitHub attestation subject; `gh attestation verify` passed for `bblanchon/pdfium-binaries` and the build-all workflow.
-- Official package metadata: PDFtoImage 5.4.0 MIT; bblanchon.PDFium.Win32 152.0.7961 Apache-2.0 package expression. The exact release archive's distributor MIT license, PDFium upstream terms and all 15 bundled component license/notice files are preserved as original texts under `licenses/third-party/`. PdfPig, SkiaSharp and the .NET/WPF runtime package notices are also included. Seven package/runtime package signatures passed `dotnet nuget verify --all`.
-- `THIRD_PARTY_NOTICES.md` records dependency tiers, exact versions, sources, hashes, attestation, and release packaging. `eng/verify-license-assets.ps1` checks resolved versions/assets, signature verification, hash/provenance/notice identity, and the published notice bundle. Result: `LICENSE_ASSETS_VERIFIED`.
-- `eng/publish-win-x64.ps1` retains the win-x64 self-contained single-file EXE and creates a release package with `THIRD_PARTY_NOTICES.md` and `licenses/third-party/`. The audited release directory contains these materials; redistribution without them is not permitted by this project's packaging policy.
-- PID 41464 was not terminated. It was absent when checked; retain `ENVIRONMENT_TEST_RESIDUE` as historical classification, not a source defect.
-- PID 41464 was not terminated. It was not present at the final process check; retain its classification as `ENVIRONMENT_TEST_RESIDUE`, not a source defect. This check does not imply a force-stop.
+- 2026-09-28 기록상 `eng/verify.ps1` Release 빌드 및 테스트가 통과했고 106/106 테스트가 통과했다. `eng/publish-win-x64.ps1`와 `eng/verify-license-assets.ps1`도 당시 통과 기록이 있다. 이번 세션에서는 재실행하지 않았다.
+- 2026-09-28 당시 의존성/라이선스 감사와 PDFium 출처 검증이 완료된 것으로 기록돼 있다. 패키지나 배포 입력이 바뀌지 않으면 반복하지 않는다.
+- 기존 한컴오피스 2024 수동 검증용 3페이지 샘플 #23 및 Golden 참조는 수정·덮어쓰기 금지다. `docs/recovery/`는 보호 사용자 자료다.
 
-## Verification
+## 알려진 이슈와 남은 일
 
-- `eng/verify.ps1`: PASS; Restore 0 / Release Build 0 / Test 0. Latest run: `artifacts/verification/20260928-205457` (SDK `10.0.300`).
-- TRX: 106 / 106 passed, 0 failed, 0 skipped or not-executed; no test reduction.
-- `git diff --check`: PASS (Git reports only LF-to-CRLF normalization warnings).
-- Temporary targeted 100-page thumbnail batch: PASS, 100/100 distinct pages rendered at the 300px long-edge policy with concurrency capped at 2; temporary test source removed afterward.
-- `eng/publish-win-x64.ps1`: PASS; `artifacts/win-x64-singlefile/PDF2HWP.exe`, 187,706,854 bytes, plus the notice and original-license bundle. `eng/verify-license-assets.ps1`: PASS, seven signed NuGet packages/runtime packs and all 15 PDFium component files verified. Final visible WPF main-window startup and graceful-close smoke had passed in the prior verification; not rerun during this license-only session.
-- A separate hidden-window smoke harness did not expose a top-level window and left its test process running; that invocation is not counted as a production-path PASS. It was not force-terminated.
-- Canonical tests exercise 100-page thumbnails, crop/rotation pixels, duplicate raster reuse, multi-source order, validation cancellation and package reopen. Sample #23 is inspected read-only and remains under `HANCOM_3PAGE_MANUAL_REQUIRED`.
-- The verifier reported SDK `10.0.300`; projects target .NET 8. Confirm an SDK 8-only environment separately if required for release qualification.
+- 한컴오피스 2024에서 기존 샘플 #23의 수동 호환성 검증이 필요하다. 샘플/Golden은 읽기 전용으로 취급한다.
+- .NET SDK 8만 설치된 환경에서의 별도 검증은 미확인이다. 이전 검증은 SDK `10.0.300`을 사용했다.
+- OCR, Editable 재구성, Safe Hybrid 대체, PDF 대 출력물 시각 비교, HWP 바이너리 출력은 범위상 미구현이다.
 
-## Integrity findings (2026-09-28)
+## 다음 단계
 
-- Prior HIGH/MEDIUM/LOW functional findings are fixed and covered by the passing suite. Unsupported OCR/Editable/Safe Hybrid/visual comparison features remain explicit non-capabilities rather than selectable options.
+1. 사용자가 Git 커밋/동기화를 수행한 뒤 다른 기기에서 문서 변경이 보이는지 확인한다.
+2. 필요 시 한컴오피스 2024에서 기존 샘플 #23을 수정 없이 열어 검증하고 결과를 기록한다.
+3. SDK 8 단독 검증이 필요할 때 별도 환경에서 `eng/verify.ps1`을 실행한다.
 
-## Known limitations / pending work
+## 환경 및 교차 기기 상태
 
-- Hancom Office manual validation of the 3-page Visual Fidelity sample #23 remains pending; do not overwrite it or the Golden references.
-- Hancom Office 2024 manual validation of 3-page sample #23 remains pending; preserve `HANCOM_3PAGE_MANUAL_REQUIRED`. It is not a license or commit blocker.
-- `ENVIRONMENT_TEST_RESIDUE`: PID 41464 was previously reported as the hidden smoke harness residue; it was not force-terminated and was absent at the latest check. It is not classified as a source defect.
-- Hancom Office 2024 manual validation of 3-page sample #23 remains required; do not modify the sample or Golden references.
-- OCR, Editable reconstruction, Safe Hybrid fallback, PDF-vs-output rendering comparison and HWP binary export remain unimplemented by scope.
+- 요구 환경: Windows x64, .NET SDK/runtime로 net8.0 프로젝트 복원·빌드·테스트, NuGet 복원. 수동 호환성 검증에 한컴오피스 2024가 필요하다.
+- 필수 외부 서비스: 확인된 바 없음. 비밀값이나 `.env` 내용은 기록하지 않는다.
+- 상태: `READY_WITH_WARNINGS`. 현재 확인한 브랜치는 `main`이며 시작 시 `origin/main`과 일치했다. 이번 수정은 아직 미커밋이므로 원격/타 기기 동기화는 사용자의 커밋 및 푸시 후 확인해야 한다.
 
-## Exact next action
+## 현재 Git 상태
 
-On the next session, first verify this commit is present after the user's Git synchronization (`main` should contain the final compliance commit); then request and record the Hancom Office 2024 manual validation of existing sample #23 without modifying the sample or Golden references. Do not repeat the dependency provenance/signature audit unless resolved packages or publish inputs change.
-
-## Environment and cross-device readiness
-
-- Required: Windows x64, .NET SDK/runtime supporting the net8.0 projects, NuGet restore; Hancom Office 2024 only for manual compatibility checks.
-- External services: none identified as required for local build/test.
-- Secrets: none recorded.
-- Current synchronization readiness: `READY_WITH_WARNINGS`; the verified repair is committed locally but has not been pushed, and pre-existing `docs/recovery/` remains untracked and untouched. Cross-device availability depends on user Git synchronization.
-
-## Git state
-
-- Branch: `main`; pre-task HEAD: `dcea1905f2b4eb17bb3e45ec4758519fe9ba1371`; production repair commit: `cd7ced419d23c00910c77456a30b3284cb089491`.
-- Expected preserved tracked changes: `src/Pdf2Hwp.App/MainWindow.xaml.cs`, `src/Pdf2Hwp.Core/ApplicationContracts.cs`, `src/Pdf2Hwp.Infrastructure/ConversionJobService.cs`, `tests/Pdf2Hwp.Tests/ConversionJobServiceTests.cs`.
-- The verified repair, audit, license texts, docs, tests and publish/audit scripts are committed on `main`; push was not run. Pre-existing `docs/recovery/` remains untracked and untouched. No reset/clean/stash/pull/push/fetch/branch operation was run.
+- 기준 HEAD: `f13fea5e56a9f69e628ad2b4e7831b7ced3f7265` (`connect`), 브랜치 `main`.
+- 이번 변경 파일: `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`, `.claude/settings.json`.
+- 커밋/푸시/브랜치 전환은 수행하지 않는다. 사용자에게 제안할 커밋 명령: `git add AGENTS.md docs/handoff/CURRENT_HANDOFF.md .claude/settings.json; git commit -m "docs: 정비 저장소 담당 및 인계 지침"`

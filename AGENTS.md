@@ -1,4 +1,39 @@
-﻿# Cross-device continuation policy
+OWNER: Codex
+
+## 프로젝트 담당표 (고정, 변경 계획 없음)
+
+| 담당 | 저장소 / 노트북 |
+|---|---|
+| Claude | HoliDay-management / program-hub-v0.1 (노트북 program-hub) / firesystem-sim (노트북 fire-simulation) / apartment-simulator / Drane / school-selfstudy-attendance |
+| Codex | Web Record (노트북 Web-Record) / chat-service / Hwp / PDF2HWP (노트북 PDF-TO-HWP) / MeMo / Print-Scan (노트북 PrintScan) / My Web (노트북 My-Web) / SchoolControl (school.-control) |
+| HOLD | Book-First (BookCoverStudio) / backup-control-center |
+| 공유 | Obsidian (별도 규칙) |
+
+## 규칙
+- 이 저장소의 OWNER와 다른 AI는 이 저장소를 수정, 생성, 삭제하지 않는다(읽기만 가능). 담당 변경은 하지 않는다.
+- 다른 담당의 프로젝트 폴더는 열어서 수정하지 않는다. 필요한 변경은 사용자에게 알린다.
+- HOLD 프로젝트는 사용자가 풀기 전까지 아무도 수정하지 않는다.
+- 작업 시작 전 AGENTS.md, 핸드오프, git status, 현재 브랜치를 읽는다. 작은 단위로 수정 → 확인 → 커밋. 큰 변경 전에는 git-rollback.cmd mark <name>. 백업 파일(.bak)은 만들지 않는다.
+- 삭제, 강제 푸시, 히스토리 수정, 데이터 삭제는 먼저 묻는다. API 키/비밀번호/토큰은 코드에 넣지 않고 .env로 분리한다.
+- 작업이 끝나면 핸드오프와 AGENTS.md를 함께 갱신한다. 실행/테스트하지 않은 것은 "동작한다"고 쓰지 않는다.
+
+## 연동 규칙 (지금은 구현하지 않음)
+- 모든 프로젝트는 다른 프로젝트 없이 단독으로 빌드, 실행, 테스트가 통과해야 한다. 연동 코드는 지금 만들지 않는다.
+- 나중 연동을 위한 입구만 남긴다: 외부와 주고받는 경계(API 엔드포인트, 이벤트, 설정값)는 한 모듈에 모으고, 연동 대상 주소와 키는 .env로 분리한다. 기능 플래그가 꺼져 있으면 연동 코드는 동작하지 않는다.
+- 예정된 연동은 docs/integration.md 한 파일에 적는다: 상대 프로젝트, 방향(누가 호출), 요청/응답 형태, 상태(계획/미착수/구현).
+- 상대 프로젝트의 담당이 다른 AI여도 저장소는 읽기만 하고, 필요한 변경은 docs/integration.md에 요청으로 남긴다. 상대 저장소를 직접 수정하지 않는다.
+- 연동 때문에 현재 프로젝트의 구조를 크게 바꾸지 않는다.
+
+## 현재 저장소 상태 (2026-10-10)
+- 이번 작업에서 담당표와 문서 지침을 정비했다. 코드/의존성 변경은 없고 현재 브랜치는 `main`, HEAD는 `f13fea5e56a9f69e628ad2b4e7831b7ced3f7265` (`connect`)다.
+- 완료: OWNER/담당표/공통 지침 반영, Claude 수정 차단 설정 생성, 핸드오프 최신화. `CLAUDE.md`의 `@AGENTS.md` import는 이미 정상이다.
+- 남은 일: 사용자 Git 동기화 후 타 기기에서도 변경 문서가 보이는지 확인한다. 한컴오피스 2024의 기존 샘플 #23 수동 검증은 여전히 필요하다.
+- 알려진 제한: .NET SDK 8 단독 환경 검증은 미확인. OCR/Editable/Safe Hybrid/HWP 바이너리 출력은 범위 밖 기능으로 미구현이다.
+- 다음 단계: 필요 시 한컴오피스 2024에서 기존 샘플 #23을 읽기 전용으로 검증하고 결과를 기록한다. 샘플 #23과 Golden 참조는 덮어쓰지 않는다.
+- 검증: 시작 시 `git status --short`는 깨끗했다. 문서/설정 편집 후 `git diff --check`는 통과했다(LF/CRLF 정규화 경고만 표시). 설정 JSON 파싱도 통과했다. 빌드/테스트는 실행하지 않았다.
+- 파일 분류: 시작 시 미추적/변경 파일 없음. 이번에 수정/생성한 파일은 `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`, `.claude/settings.json`이며 모두 커밋 대상이다.
+- 동기화 상태: 시작 시 `main`이 `origin/main`과 일치했다. 이번 변경은 아직 미커밋이므로 타 기기 동기화는 Git 커밋/푸시 후 확인해야 한다 (`READY_WITH_WARNINGS`).
+# Cross-device continuation policy
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
 
