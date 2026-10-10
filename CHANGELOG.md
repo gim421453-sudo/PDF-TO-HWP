@@ -6,6 +6,7 @@ Record verified, release-relevant product or operator changes here. No release e
 
 ### Fixed
 
+- Convert failures from opening the result folder or saving reports and diagnostics into status messages instead of letting them escape WPF event handlers.
 - Preserve page pixels for offset, asymmetric PDF CropBoxes by avoiding a second PDFium bounds crop; cover rotations 0/90/180/270 with pixel-level regression tests.
 - Preserve validation warnings as `CompletedWithWarnings` in conversion results, history, progress, and the WPF status display instead of presenting them as successful completion.
 - Connect the WPF HWPX path to PDFium rendering, job-scoped raster reuse, page-background packaging, and package/reopen validation; preserve PDF rotation and CropBox geometry.

@@ -121,3 +121,12 @@ public static class ConversionErrorMapper
         _ => error.Message
     };
 }
+
+public static class UserOperationGuard
+{
+    public static string? CaptureError(Action action)
+    {
+        try { action(); return null; }
+        catch (Exception error) { return ConversionErrorMapper.ToUserMessage(error); }
+    }
+}
