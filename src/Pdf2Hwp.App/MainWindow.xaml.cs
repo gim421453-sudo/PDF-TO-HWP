@@ -277,7 +277,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         if (path is null) { Status = "파일을 찾을 수 없습니다."; return; }
         try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); } catch (Exception ex) { Status = ConversionErrorMapper.ToUserMessage(ex); }
     }
-    public void RemoveHistory() { if (SelectedHistory is null) return; var index = History.ToList().IndexOf(SelectedHistory); _history.RemoveAt(index); SelectedHistory = null; OnPropertyChanged(nameof(History)); }
+    public void RemoveHistory() { var selected = SelectedHistory; if (selected is null) return; var removed = _history.Remove(selected); SelectedHistory = null; OnPropertyChanged(nameof(History)); Status = removed ? "변환 기록을 삭제했습니다. 출력 파일은 그대로 유지됩니다." : "선택한 변환 기록을 찾을 수 없습니다."; }
     public void ClearHistory() { _history.Clear(); SelectedHistory = null; OnPropertyChanged(nameof(History)); Status = "변환 기록을 지웠습니다. 출력 파일은 그대로 유지됩니다."; }
     public void ClearPreviewCache() { try { _thumbnailCache.Clear(); _thumbnailCache.Cleanup(); OnPropertyChanged(nameof(PreviewCacheSummary)); Status = "미리보기 캐시를 지웠습니다."; } catch (Exception ex) { Status = "캐시를 지울 수 없습니다: " + ex.Message; } }
     public void RemoveRecent(string file) { _recent.Remove(file); var index = -1; for (var i = 0; i < RecentFiles.Count; i++) if (string.Equals(RecentFiles[i].Path, file, StringComparison.OrdinalIgnoreCase)) { index = i; break; } if (index >= 0) RecentFiles.RemoveAt(index); }

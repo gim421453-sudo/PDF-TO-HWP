@@ -63,12 +63,30 @@ public sealed class ConversionHistoryStore(string path, int maxEntries = 20)
         return System.Text.Json.JsonSerializer.Serialize(new[] { entry }.Concat(items).Take(maxEntries));
     });
     public void Clear() => AtomicJson.Write(path, "[]");
-    public void RemoveAt(int index) => AtomicJson.Update(path, old =>
+    public bool Remove(ConversionHistoryEntry entry)
     {
-        List<ConversionHistoryEntry> items; try { items = System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(old ?? "[]") ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); items = []; }
-        if (index >= 0 && index < items.Count) items.RemoveAt(index);
-        return System.Text.Json.JsonSerializer.Serialize(items);
-    });
+        var removed = false;
+        AtomicJson.Update(path, old =>
+        {
+            List<ConversionHistoryEntry> items; try { items = System.Text.Json.JsonSerializer.Deserialize<List<ConversionHistoryEntry>>(old ?? "[]") ?? []; } catch (System.Text.Json.JsonException) { AtomicJson.PreserveCorrupt(path); items = []; }
+            var index = items.FindIndex(candidate => SameEntry(candidate, entry));
+            if (index >= 0) { items.RemoveAt(index); removed = true; }
+            return System.Text.Json.JsonSerializer.Serialize(items);
+        });
+        return removed;
+    }
+    private static bool SameEntry(ConversionHistoryEntry left, ConversionHistoryEntry right) =>
+        left.Timestamp == right.Timestamp &&
+        left.OutputPath == right.OutputPath &&
+        left.PageCount == right.PageCount &&
+        left.RenderQuality == right.RenderQuality &&
+        left.Duration == right.Duration &&
+        left.Status == right.Status &&
+        left.AppVersion == right.AppVersion &&
+        left.SchemaVersion == right.SchemaVersion &&
+        left.ReportPath == right.ReportPath &&
+        left.SourceDisplayNames.SequenceEqual(right.SourceDisplayNames, StringComparer.Ordinal) &&
+        (left.Pages is null ? right.Pages is null : right.Pages is not null && left.Pages.SequenceEqual(right.Pages));
 }
 internal static class AtomicJson
 {
