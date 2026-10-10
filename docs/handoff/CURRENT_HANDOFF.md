@@ -14,7 +14,7 @@ Status: P1_CROPPING_FIXED / READY_WITH_WARNINGS
 
 ### 저장소 기준 상태
 
-- 브랜치 `main`, HEAD `b5285fd7744214bad8a9763396f411a11e326ed3` (`docs: 정비 저장소 담당 및 인계 지침`). `origin/main` 로컬 추적 ref보다 1커밋 앞섬. 원격 최신 상태는 fetch하지 않아 확인하지 않았다.
+- 브랜치 `main`. CropBox 수정 커밋 `b5bef36`과 핸드오프 정리 커밋을 `origin/main`에 푸시했으며 로컬 추적 ref와 동기화됐다.
 - 시작 시 앞선 진단에서 남긴 `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md` 변경이 있었다. 이번 작업은 렌더러, 테스트, CHANGELOG, AGENTS, 핸드오프를 수정했다. 의존성과 보호 자료는 변경하지 않았다.
 - 2026-10-02 감사 이후 렌더러에는 관련 수정이 없었다. 새 픽셀 회귀는 기존 결함을 네 회전 모두에서 재현했다.
 - `docs/recovery/`의 7개 파일은 Git 추적 대상이다. 보호 사용자 자료로 취급해 열람·수정하지 않았다.
@@ -67,5 +67,5 @@ Status: P1_CROPPING_FIXED / READY_WITH_WARNINGS
 
 - Windows x64, .NET SDK 8.0.425 선택 검증 PASS. 현재 PC에는 SDK 10.0.401도 설치돼 있으므로 SDK 8만 설치된 시스템과 동일하지 않다.
 - 기본 셸 PowerShell 5.1.26100; 관리 경로에서 `pwsh 7.6.5` 발견. 외부 서비스는 로컬 검증에 필요하지 않다. 비밀값은 기록하지 않는다.
-- 브랜치 `main`, HEAD `b5285fd7744214bad8a9763396f411a11e326ed3`, `origin/main`보다 1커밋 앞섬. 원격 상태는 fetch 금지 정책에 따라 미확인.
-- 현재 수정 파일: `AGENTS.md`, `CHANGELOG.md`, `docs/handoff/CURRENT_HANDOFF.md`, `src/Pdf2Hwp.Infrastructure/PdfiumPageRenderer.cs`, `tests/Pdf2Hwp.Tests/PdfPipelineTests.cs`. 검증 산출물은 ignore 대상 `artifacts/verification/20261010-120127/`. 의존성 및 보호 파일은 미변경. 교차 기기 상태 `READY_WITH_WARNINGS`; 변경은 미커밋이며 Git 작업은 수행하지 않았다.
+- 브랜치 `main`. CropBox 수정 및 핸드오프 정리 커밋을 `origin/main`에 푸시 완료했다.
+- 커밋에 포함된 파일: `AGENTS.md`, `CHANGELOG.md`, `docs/handoff/CURRENT_HANDOFF.md`, `src/Pdf2Hwp.Infrastructure/PdfiumPageRenderer.cs`, `tests/Pdf2Hwp.Tests/PdfPipelineTests.cs`. 검증 산출물은 ignore 대상 `artifacts/verification/20261010-120127/`. 의존성 및 보호 파일은 미변경. `main`과 `origin/main` 동기화 완료, 작업 트리는 깨끗하다. 교차 기기 상태 `READY_WITH_WARNINGS` (한컴 수동 검증 등 미검증 항목 존재).
