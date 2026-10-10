@@ -6,6 +6,9 @@ Record verified, release-relevant product or operator changes here. No release e
 
 ### Fixed
 
+- Clear each conversion-attempt snapshot before validation and after completion so a failed new attempt cannot record pages from an older job.
+- Map synchronous result-folder, report-export, and diagnostics errors to visible UI status messages instead of letting them escape the event handlers.
+- Continue adding the remaining PDFs after an individual batch-import failure, while preserving cancellation behavior and reporting failed items.
 - Remove the selected conversion history entry by matching its persisted value, so JSON reloads do not make deletion silently fail; preserve the generated output file.
 - Preserve page pixels for offset, asymmetric PDF CropBoxes by avoiding a second PDFium bounds crop; cover rotations 0/90/180/270 with pixel-level regression tests.
 - Preserve validation warnings as `CompletedWithWarnings` in conversion results, history, progress, and the WPF status display instead of presenting them as successful completion.
