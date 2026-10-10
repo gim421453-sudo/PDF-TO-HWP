@@ -25,15 +25,16 @@ OWNER: Codex
 - 연동 때문에 현재 프로젝트의 구조를 크게 바꾸지 않는다.
 
 ## 현재 저장소 상태 (2026-10-10)
-- 목적: 정밀진단에서 확인한 P1 CropBox 픽셀 손실을 수정하고 회귀 테스트를 추가했다. 브랜치는 `main`; 수정 커밋 `b5bef36` 및 핸드오프 정리 커밋을 `origin/main`에 푸시했다.
-- 검증: SDK `10.0.401`로 `eng/verify.ps1` PASS (Restore/Release Build/Test, 110/110; 산출물 `artifacts/verification/20261010-120127`). `git diff --check` PASS. 한컴오피스 수동 검증, 라이선스 자산 검증은 NOT VERIFIED/NOT RUN.
+- 목적: P2-4 다중 PDF 추가 중 한 파일의 분석이 실패하면 이후 파일 추가도 중단되던 문제를 수정했다. 작업 브랜치는 `codex/fix-batch-pdf-import`, `main`의 `7d5210b`에서 분기했다.
+- 검증: SDK `10.0.401`로 `eng/verify.ps1` PASS (Restore/Release Build/Test, 111/111; 산출물 `artifacts/verification/20261010-131840`). `git diff --check` PASS. WPF GUI 수동 검증은 NOT RUN.
 - 해결된 P1: PDFium이 기본 CropBox 클리핑을 이미 적용하는데 같은 PDF 절대좌표를 `Bounds`로 다시 전달해 픽셀이 손실되던 문제. `PdfiumPageRenderer`에서 중복 Bounds를 제거했고, 비대칭 오프셋 CropBox를 회전 0/90/180/270에서 검증하는 픽셀 회귀를 추가했다.
-- 활성 P2: 기록 삭제가 -1 인덱스로 실패(감사 당시 재현, `MainWindow.xaml.cs:175,280`); 변환 사전 검증 실패가 이전 작업 스냅샷을 결과 기록할 수 있음(`:47,52,75,261-265`); UI 이벤트의 예외 누락(`:79,252,267`); 여러 PDF 추가 중 첫 실패 뒤 파일 중단(`:29-33,190-`); 문서 페이지마다 원본 전체 재해시(`PreviewThumbnails.cs:27-30`); 샘플 생성기가 보호 파일 #23을 덮어쓸 수 있음(`CompatibilitySampleGenerator/Program.cs:40-42`, writer overwrite true).
+- 해결된 P2-4: 파일별 분석 예외를 수집하고 배치 처리를 계속해 이후 유효 PDF도 추가되도록 했다. 실패 파일과 최근 파일 목록 갱신 경고를 구분해 표시한다. 계속 처리 단위 테스트와 전체 111개 검증이 통과했다.
+- 남은 P2: P2-1 기록 삭제, P2-2 스냅샷, P2-3 UI 예외 수정은 각각 별도 브랜치에 있으나 main에는 미반영. 문서 페이지마다 원본 전체 재해시(`PreviewThumbnails.cs:27-30`); 샘플 생성기가 보호 파일 #23을 덮어쓸 수 있음(`CompatibilitySampleGenerator/Program.cs:40-42`, writer overwrite true).
 - P3/품질: 크래시 후 표시 없는 렌더 임시 폴더 잔존 가능, HWP 미지원인데 UI/패키지 설명은 HWP를 표방, 회전/크롭 편집 연산은 UI에 노출되지 않음, 진단 잔여물 `run.err`/`run.out`/`section18.xml`이 추적됨, HWPX inspector가 섹션 배경 참조를 완전히 확인하지 않음.
 - 보호/미검증: 샘플 #23 자동 구조 검사는 PASS(검사 전후 해시 일치, 3개 섹션), Hancom 실제 열기는 Computer Use helper 오류로 NOT VERIFIED. `docs/recovery/` 파일 7개는 추적 중이며 수정하지 않는다. 샘플 생성 도구는 실행하지 않는다.
 - 라이선스: `eng/verify-license-assets.ps1`은 AGENTS 지침에 따라 이번에 실행하지 않았다. 기본 셸은 PS 5.1이나 PATH에 관리 런타임 `pwsh 7.6.5`가 발견됐다. 마지막 기록 검증은 2026-09-28이다.
-- 다음 단계: P2-1 기록 삭제 오류를 수정하고 테스트한다. 그 뒤 P2-2~P2-6을 우선순위대로 다룬다. Hancom 수동 검증은 helper 복구 후 샘플 #23을 열기만 한다.
-- 커밋된 변경 파일: `AGENTS.md`, `CHANGELOG.md`, `docs/handoff/CURRENT_HANDOFF.md`, `src/Pdf2Hwp.Infrastructure/PdfiumPageRenderer.cs`, `tests/Pdf2Hwp.Tests/PdfPipelineTests.cs`. 의존성과 보호 파일은 변경하지 않았다. `main`과 `origin/main`이 동기화된 상태로 작업 트리가 깨끗하다. 교차 기기 준비도 `READY_WITH_WARNINGS` (한컴 수동 검증 등 미검증 항목 존재).
+- 다음 단계: 별도 브랜치에서 P2-1~P2-3이 각각 수정 중이다. 이후 P2-5 해시 재사용과 P2-6 샘플 생성기 안전 경로를 다룬다. Hancom 수동 검증은 helper 복구 후 샘플 #23을 열기만 한다.
+- 이번 변경 파일: `AGENTS.md`, `CHANGELOG.md`, `docs/handoff/CURRENT_HANDOFF.md`, `src/Pdf2Hwp.App/MainWindow.xaml.cs`, `src/Pdf2Hwp.Core/BatchProcessor.cs`, `tests/Pdf2Hwp.Tests/ApplicationServicesTests.cs`. 의존성과 보호 파일은 변경하지 않았다. 커밋 전 검토를 위해 미커밋·미푸시로 유지한다. 교차 기기 준비도 `READY_WITH_WARNINGS`.
 # Cross-device continuation policy
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
