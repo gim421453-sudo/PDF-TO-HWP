@@ -22,9 +22,10 @@ public sealed class PdfiumPageRenderer : IPdfPageRenderer
             var intrinsicRotation = ((request.IntrinsicRotationDegrees % 360) + 360) % 360;
             var renderRotation = ((normalizedRotation - intrinsicRotation) % 360 + 360) % 360;
             var rotation = renderRotation switch { 90 => PdfRotation.Rotate90, 180 => PdfRotation.Rotate180, 270 => PdfRotation.Rotate270, _ => PdfRotation.Rotate0 };
-            RectangleF? bounds = request.CropBox is { } crop ? new RectangleF((float)crop.Left, (float)crop.Bottom, (float)crop.Width, (float)crop.Height) : null;
             Conversion.SavePng(request.OutputPngPath, source, page: request.PageNumber - 1,
-                options: new(Dpi: request.Dpi, Width: request.Width, Height: request.Height, WithAspectRatio: request.Width.HasValue ^ request.Height.HasValue, Rotation: rotation, Bounds: bounds));
+                // PDFium already clips a page to its PDF CropBox. Passing the same PDF-space
+                // coordinates as PDFtoImage bounds applies the offset a second time.
+                options: new(Dpi: request.Dpi, Width: request.Width, Height: request.Height, WithAspectRatio: request.Width.HasValue ^ request.Height.HasValue, Rotation: rotation));
         }
         finally { RenderGate.Release(); }
     }

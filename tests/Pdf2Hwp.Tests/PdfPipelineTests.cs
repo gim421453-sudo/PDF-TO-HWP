@@ -175,6 +175,26 @@ public sealed class PdfPipelineTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(90)]
+    [InlineData(180)]
+    [InlineData(270)]
+    public async Task Renderer_preserves_pixels_for_offset_asymmetric_cropbox(int rotation)
+    {
+        using var fixture = new PipelineFixture();
+        var pdfPath = Path.Combine(fixture.Directory, "offset-crop.pdf");
+        await File.WriteAllBytesAsync(pdfPath, MinimalPdf.Create(rotation, [20, 10, 120, 60], paintCropBoxBlack: true));
+        var analyzed = await new PdfPigAnalyzer().AnalyzeAsync(pdfPath, CancellationToken.None);
+        var pngPath = Path.Combine(fixture.Directory, "offset-crop.png");
+        await new PdfiumPageRenderer().RenderAsync(new(pdfPath, 1, pngPath, 72, RotationDegrees: rotation, CropBox: analyzed.Pages[0].CropBox, IntrinsicRotationDegrees: analyzed.Pages[0].Rotation), CancellationToken.None);
+
+        var decoded = PngTestDecoder.Decode(await File.ReadAllBytesAsync(pngPath));
+        Assert.Equal(rotation is 90 or 270 ? 50 : 100, decoded.Width);
+        Assert.Equal(rotation is 90 or 270 ? 100 : 50, decoded.Height);
+        Assert.True(decoded.Pixels.All(pixel => pixel < 32), $"Expected the full crop to be black; {decoded.Pixels.Count(pixel => pixel >= 32)} of {decoded.Pixels.Length} pixels were lighter.");
+    }
+
+    [Theory]
     [InlineData(0, 200, 300)]
     [InlineData(90, 300, 200)]
     [InlineData(180, 200, 300)]
@@ -217,7 +237,7 @@ internal sealed class PipelineFixture : IDisposable
 
 internal static class MinimalPdf
 {
-    public static byte[] Create(int rotation = 0, int[]? cropBox = null, int pageCount = 1, int mediaWidth = 200, int mediaHeight = 200)
+    public static byte[] Create(int rotation = 0, int[]? cropBox = null, int pageCount = 1, int mediaWidth = 200, int mediaHeight = 200, bool paintCropBoxBlack = false)
     {
         if (pageCount <= 0) throw new ArgumentOutOfRangeException(nameof(pageCount));
         var crop = cropBox is null ? "" : $" /CropBox [{string.Join(" ", cropBox)}]";
@@ -226,10 +246,68 @@ internal static class MinimalPdf
         var kids = string.Join(" ", Enumerable.Range(3, pageCount).Select(id => $"{id} 0 R"));
         var objects = new List<string> { "<< /Type /Catalog /Pages 2 0 R >>", $"<< /Type /Pages /Kids [{kids}] /Count {pageCount} >>" };
         for (var index = 0; index < pageCount; index++) objects.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {mediaWidth} {mediaHeight}]{crop}{rotate} /Resources << /Font << /F1 {fontId} 0 R >> >> /Contents {firstContentId + index} 0 R >>");
-        for (var index = 0; index < pageCount; index++) { var content = $"BT /F1 18 Tf 20 {100 - index % 80} Td (Page {index + 1}) Tj ET"; objects.Add($"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}\nendstream"); }
+        for (var index = 0; index < pageCount; index++) { var content = paintCropBoxBlack ? "0 g 20 10 100 50 re f" : $"BT /F1 18 Tf 20 {100 - index % 80} Td (Page {index + 1}) Tj ET"; objects.Add($"<< /Length {Encoding.ASCII.GetByteCount(content)} >>\nstream\n{content}\nendstream"); }
         objects.Add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
         var builder = new StringBuilder("%PDF-1.4\n"); var offsets = new List<int> { 0 };
         for (var index = 0; index < objects.Count; index++) { offsets.Add(Encoding.ASCII.GetByteCount(builder.ToString())); builder.Append(index + 1).Append(" 0 obj\n").Append(objects[index]).Append("\nendobj\n"); }
         var xref = Encoding.ASCII.GetByteCount(builder.ToString()); builder.Append("xref\n0 ").Append(objects.Count + 1).Append("\n0000000000 65535 f \n"); foreach (var offset in offsets.Skip(1)) builder.Append(offset.ToString("D10", System.Globalization.CultureInfo.InvariantCulture)).Append(" 00000 n \n"); builder.Append("trailer\n<< /Size ").Append(objects.Count + 1).Append(" /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF\n"); return Encoding.ASCII.GetBytes(builder.ToString());
+    }
+}
+
+internal static class PngTestDecoder
+{
+    public static (int Width, int Height, byte[] Pixels) Decode(byte[] png)
+    {
+        using var compressed = new MemoryStream();
+        var width = 0; var height = 0; var bitDepth = 0; var colorType = 0;
+        for (var offset = 8; offset < png.Length;)
+        {
+            var length = ReadInt(png, offset); offset += 4;
+            var type = System.Text.Encoding.ASCII.GetString(png, offset, 4); offset += 4;
+            if (type == "IHDR") { width = ReadInt(png, offset); height = ReadInt(png, offset + 4); bitDepth = png[offset + 8]; colorType = png[offset + 9]; }
+            if (type == "IDAT") compressed.Write(png, offset, length);
+            offset += length + 4;
+            if (type == "IEND") break;
+        }
+        var channels = colorType switch { 0 => 1, 2 => 3, 4 => 2, 6 => 4, _ => throw new InvalidDataException($"Unsupported PNG color type {colorType}.") };
+        if (bitDepth != 8) throw new InvalidDataException($"Unsupported PNG bit depth {bitDepth}.");
+        compressed.Position = 0;
+        using var zlib = new System.IO.Compression.ZLibStream(compressed, System.IO.Compression.CompressionMode.Decompress);
+        var stride = checked(width * channels); var raw = new byte[checked(height * (stride + 1))];
+        zlib.ReadExactly(raw);
+        var decoded = new byte[checked(height * stride)];
+        for (var y = 0; y < height; y++)
+        {
+            var filter = raw[y * (stride + 1)]; var source = y * (stride + 1) + 1; var target = y * stride;
+            for (var x = 0; x < stride; x++)
+            {
+                var left = x >= channels ? decoded[target + x - channels] : 0;
+                var above = y > 0 ? decoded[target + x - stride] : 0;
+                var upperLeft = y > 0 && x >= channels ? decoded[target + x - stride - channels] : 0;
+                decoded[target + x] = unchecked((byte)(raw[source + x] + (filter switch
+                {
+                    0 => 0,
+                    1 => left,
+                    2 => above,
+                    3 => (left + above) / 2,
+                    4 => Paeth(left, above, upperLeft),
+                    _ => throw new InvalidDataException($"Unsupported PNG filter {filter}.")
+                })));
+            }
+        }
+        var pixels = new byte[checked(width * height)];
+        for (var i = 0; i < pixels.Length; i++) pixels[i] = colorType switch
+        {
+            0 => decoded[i], 2 => (byte)((decoded[i * 3] * 299 + decoded[i * 3 + 1] * 587 + decoded[i * 3 + 2] * 114) / 1000),
+            4 => decoded[i * 2], 6 => (byte)((decoded[i * 4] * 299 + decoded[i * 4 + 1] * 587 + decoded[i * 4 + 2] * 114) / 1000), _ => 0
+        };
+        return (width, height, pixels);
+    }
+
+    private static int ReadInt(byte[] bytes, int offset) => (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+    private static int Paeth(int a, int b, int c)
+    {
+        var p = a + b - c; var pa = Math.Abs(p - a); var pb = Math.Abs(p - b); var pc = Math.Abs(p - c);
+        return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
     }
 }

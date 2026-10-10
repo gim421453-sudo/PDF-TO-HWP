@@ -25,14 +25,15 @@ OWNER: Codex
 - 연동 때문에 현재 프로젝트의 구조를 크게 바꾸지 않는다.
 
 ## 현재 저장소 상태 (2026-10-10)
-- 이번 작업에서 담당표와 문서 지침을 정비했다. 코드/의존성 변경은 없고 현재 브랜치는 `main`, HEAD는 `f13fea5e56a9f69e628ad2b4e7831b7ced3f7265` (`connect`)다.
-- 완료: OWNER/담당표/공통 지침 반영, Claude 수정 차단 설정 생성, 핸드오프 최신화. `CLAUDE.md`의 `@AGENTS.md` import는 이미 정상이다.
-- 남은 일: 사용자 Git 동기화 후 타 기기에서도 변경 문서가 보이는지 확인한다. 한컴오피스 2024의 기존 샘플 #23 수동 검증은 여전히 필요하다.
-- 알려진 제한: .NET SDK 8 단독 환경 검증은 미확인. OCR/Editable/Safe Hybrid/HWP 바이너리 출력은 범위 밖 기능으로 미구현이다.
-- 다음 단계: 필요 시 한컴오피스 2024에서 기존 샘플 #23을 읽기 전용으로 검증하고 결과를 기록한다. 샘플 #23과 Golden 참조는 덮어쓰지 않는다.
-- 검증: 시작 시 `git status --short`는 깨끗했다. 문서/설정 편집 후 `git diff --check`는 통과했다(LF/CRLF 정규화 경고만 표시). 설정 JSON 파싱도 통과했다. 빌드/테스트는 실행하지 않았다.
-- 파일 분류: 시작 시 미추적/변경 파일 없음. 이번에 수정/생성한 파일은 `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`, `.claude/settings.json`이며 모두 커밋 대상이다.
-- 동기화 상태: 시작 시 `main`이 `origin/main`과 일치했다. 이번 변경은 아직 미커밋이므로 타 기기 동기화는 Git 커밋/푸시 후 확인해야 한다 (`READY_WITH_WARNINGS`).
+- 목적: 정밀진단에서 확인한 P1 CropBox 픽셀 손실을 수정하고 회귀 테스트를 추가했다. 브랜치 `main`, HEAD `b5285fd7744214bad8a9763396f411a11e326ed3` (`docs: 정비 저장소 담당 및 인계 지침`), `origin/main`보다 1커밋 앞섬.
+- 검증: SDK `10.0.401`로 `eng/verify.ps1` PASS (Restore/Release Build/Test, 110/110; 산출물 `artifacts/verification/20261010-120127`). `git diff --check` PASS. 한컴오피스 수동 검증, 라이선스 자산 검증은 NOT VERIFIED/NOT RUN.
+- 해결된 P1: PDFium이 기본 CropBox 클리핑을 이미 적용하는데 같은 PDF 절대좌표를 `Bounds`로 다시 전달해 픽셀이 손실되던 문제. `PdfiumPageRenderer`에서 중복 Bounds를 제거했고, 비대칭 오프셋 CropBox를 회전 0/90/180/270에서 검증하는 픽셀 회귀를 추가했다.
+- 활성 P2: 기록 삭제가 -1 인덱스로 실패(감사 당시 재현, `MainWindow.xaml.cs:175,280`); 변환 사전 검증 실패가 이전 작업 스냅샷을 결과 기록할 수 있음(`:47,52,75,261-265`); UI 이벤트의 예외 누락(`:79,252,267`); 여러 PDF 추가 중 첫 실패 뒤 파일 중단(`:29-33,190-`); 문서 페이지마다 원본 전체 재해시(`PreviewThumbnails.cs:27-30`); 샘플 생성기가 보호 파일 #23을 덮어쓸 수 있음(`CompatibilitySampleGenerator/Program.cs:40-42`, writer overwrite true).
+- P3/품질: 크래시 후 표시 없는 렌더 임시 폴더 잔존 가능, HWP 미지원인데 UI/패키지 설명은 HWP를 표방, 회전/크롭 편집 연산은 UI에 노출되지 않음, 진단 잔여물 `run.err`/`run.out`/`section18.xml`이 추적됨, HWPX inspector가 섹션 배경 참조를 완전히 확인하지 않음.
+- 보호/미검증: 샘플 #23 자동 구조 검사는 PASS(검사 전후 해시 일치, 3개 섹션), Hancom 실제 열기는 Computer Use helper 오류로 NOT VERIFIED. `docs/recovery/` 파일 7개는 추적 중이며 수정하지 않는다. 샘플 생성 도구는 실행하지 않는다.
+- 라이선스: `eng/verify-license-assets.ps1`은 AGENTS 지침에 따라 이번에 실행하지 않았다. 기본 셸은 PS 5.1이나 PATH에 관리 런타임 `pwsh 7.6.5`가 발견됐다. 마지막 기록 검증은 2026-09-28이다.
+- 다음 단계: P2-1 기록 삭제 오류를 수정하고 테스트한다. 그 뒤 P2-2~P2-6을 우선순위대로 다룬다. Hancom 수동 검증은 helper 복구 후 샘플 #23을 열기만 한다.
+- 현재 수정 파일: `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`, `CHANGELOG.md`, `src/Pdf2Hwp.Infrastructure/PdfiumPageRenderer.cs`, `tests/Pdf2Hwp.Tests/PdfPipelineTests.cs`. 의존성과 보호 파일은 변경하지 않았다. 교차 기기 준비도 `READY_WITH_WARNINGS` (로컬 ahead 1, 변경 미커밋).
 # Cross-device continuation policy
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
