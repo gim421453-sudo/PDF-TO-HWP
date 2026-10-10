@@ -47,6 +47,22 @@ public sealed class ApplicationServicesTests
         Assert.Equal("파일 또는 출력 폴더에 접근할 수 없습니다.", error);
         Assert.Null(UserOperationGuard.CaptureError(() => { }));
     }
+
+    [Fact] public async Task Batch_processing_continues_after_an_item_fails()
+    {
+        var processed = new List<int>();
+        var failures = await BatchProcessor.ContinueOnFailureAsync([1, 2, 3], async item =>
+        {
+            processed.Add(item);
+            await Task.Yield();
+            if (item == 2) throw new InvalidDataException("bad item");
+        });
+
+        Assert.Equal([1, 2, 3], processed);
+        var failure = Assert.Single(failures);
+        Assert.Equal(2, failure.Item);
+        Assert.IsType<InvalidDataException>(failure.Error);
+    }
     [Fact] public void Failed_and_cancelled_history_are_kept_without_assuming_output_exists_and_clear_preserves_output() { using var d = new TempDirectory(); var source = Path.Combine(d.Path, "source.pdf"); File.WriteAllText(source, "source"); var output = Path.Combine(d.Path, "result.hwpx"); File.WriteAllText(output, "output"); var store = new ConversionHistoryStore(Path.Combine(d.Path, "history.json")); store.Add(new(DateTimeOffset.UtcNow, ["source.pdf"], Path.Combine(d.Path, "missing.hwpx"), 1, RenderQuality.Standard, TimeSpan.Zero, ConversionJobStatus.Cancelled, "0.1.0", [new(source, 0)])); store.Add(new(DateTimeOffset.UtcNow, ["source.pdf"], output, 1, RenderQuality.Standard, TimeSpan.Zero, ConversionJobStatus.Failed, "0.1.0", [new(source, 0)])); var entries = store.Load(); Assert.Contains(entries, e => e.Status == ConversionJobStatus.Cancelled && !File.Exists(e.OutputPath) && e.CanRetry); Assert.Contains(entries, e => e.Status == ConversionJobStatus.Failed && e.CanRetry); store.Clear(); Assert.Empty(store.Load()); Assert.Equal("output", File.ReadAllText(output)); }
     [Fact] public void Settings_save_is_atomic_and_leaves_no_partial_file() { using var d = new TempDirectory(); var path = Path.Combine(d.Path, "settings.json"); new JsonSettingsStore(path).Save(new(d.Path)); Assert.False(Directory.GetFiles(d.Path, "*.partial-*", SearchOption.TopDirectoryOnly).Any()); Assert.True(File.Exists(path)); }
     [Fact] public void Corrupt_recent_and_history_files_are_preserved_before_fallback()

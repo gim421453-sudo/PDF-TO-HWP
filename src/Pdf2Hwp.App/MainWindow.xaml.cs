@@ -200,17 +200,30 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public async Task AddFilesAsync(IEnumerable<string> paths)
     {
         var analyzer = new PdfPigAnalyzer();
-        foreach (var path in paths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
+        var candidates = paths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var recentFileWarnings = new List<string>();
+        var failures = await BatchProcessor.ContinueOnFailureAsync(candidates, async path =>
         {
-            if (Workspace.Pages.Any(p => string.Equals(p.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))) continue;
+            var fullPath = Path.GetFullPath(path);
+            if (Workspace.Pages.Any(p => string.Equals(p.SourcePath, fullPath, StringComparison.OrdinalIgnoreCase))) return;
             Status = $"페이지 분석 중: {Path.GetFileName(path)}";
             var document = await analyzer.AnalyzeAsync(path, CancellationToken.None);
-            var source = Workspace.Sources.FirstOrDefault(s => string.Equals(s.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) ?? SourceDocument.Create(path, document.PageCount);
+            var source = Workspace.Sources.FirstOrDefault(s => string.Equals(s.SourcePath, fullPath, StringComparison.OrdinalIgnoreCase)) ?? SourceDocument.Create(path, document.PageCount);
             WorkspaceHistory.Execute("AddSource", workspace => workspace.AddSource(source, document.Pages));
-            foreach (var page in Workspace.Pages.Where(p => string.Equals(p.SourcePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))) Pages.Add(new(page));
-            _recent.Add(path); var recentPath = Path.GetFullPath(path); for (var i = RecentFiles.Count - 1; i >= 0; i--) if (string.Equals(RecentFiles[i].Path, recentPath, StringComparison.OrdinalIgnoreCase)) RecentFiles.RemoveAt(i); RecentFiles.Insert(0, (recentPath, DateTimeOffset.UtcNow)); while (RecentFiles.Count > 10) RecentFiles.RemoveAt(RecentFiles.Count - 1);
-        }
-        Status = Pages.Count == 0 ? "PDF를 선택하거나 이 창으로 끌어 놓으세요." : "페이지를 검토한 뒤 변환을 시작하세요.";
+            foreach (var page in Workspace.Pages.Where(p => string.Equals(p.SourcePath, fullPath, StringComparison.OrdinalIgnoreCase))) Pages.Add(new(page));
+            try
+            {
+                _recent.Add(path);
+                for (var i = RecentFiles.Count - 1; i >= 0; i--) if (string.Equals(RecentFiles[i].Path, fullPath, StringComparison.OrdinalIgnoreCase)) RecentFiles.RemoveAt(i);
+                RecentFiles.Insert(0, (fullPath, DateTimeOffset.UtcNow));
+                while (RecentFiles.Count > 10) RecentFiles.RemoveAt(RecentFiles.Count - 1);
+            }
+            catch (Exception error) { recentFileWarnings.Add($"{Path.GetFileName(path)}: {ConversionErrorMapper.ToUserMessage(error)}"); }
+        });
+        var messages = new List<string>();
+        if (failures.Count > 0) messages.Add($"PDF 추가 실패 {failures.Count}개: {string.Join("; ", failures.Take(3).Select(f => $"{Path.GetFileName(f.Item)} — {ConversionErrorMapper.ToUserMessage(f.Error)}"))}{(failures.Count > 3 ? "; 그 외 파일은 생략" : "")}");
+        if (recentFileWarnings.Count > 0) messages.Add($"PDF는 추가했지만 최근 파일 목록을 갱신하지 못함: {string.Join("; ", recentFileWarnings.Take(3))}{(recentFileWarnings.Count > 3 ? "; 그 외 파일은 생략" : "")}");
+        Status = messages.Count > 0 ? string.Join(" · ", messages) : Pages.Count == 0 ? "PDF를 선택하거나 이 창으로 끌어 놓으세요." : "페이지를 검토한 뒤 변환을 시작하세요.";
         OnPropertyChanged(nameof(PageSummary));
     }
     public async Task LoadPreviewsAsync(IEnumerable<PageViewModel> selected, bool invalidate = false)
