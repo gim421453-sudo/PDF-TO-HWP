@@ -6,6 +6,7 @@ Record verified, release-relevant product or operator changes here. No release e
 
 ### Fixed
 
+- Atomically reserve compatibility-sample output directories, reject non-empty explicit output directories, and allow only one concurrent generator to write to a path, protecting tracked sample fixtures from overwrite.
 - Clear each conversion-attempt snapshot before validation and after completion so a failed new attempt cannot record pages from an older job.
 - Map synchronous result-folder, report-export, and diagnostics errors to visible UI status messages instead of letting them escape the event handlers.
 - Continue adding the remaining PDFs after an individual batch-import failure, while preserving cancellation behavior and reporting failed items.

@@ -3,9 +3,15 @@ using Pdf2Hwp.Infrastructure;
 using System.Text;
 
 var root = Path.Combine(Environment.CurrentDirectory, "artifacts");
-var directory = Path.Combine(root, "compatibility-tests");
 var fixtureDirectory = Path.Combine(root, "image-fixtures");
-Directory.CreateDirectory(directory); Directory.CreateDirectory(fixtureDirectory);
+var outputRoot = args.Length == 0
+    ? Path.Combine(Path.GetTempPath(), "PDF2HWP-compatibility-samples", Guid.NewGuid().ToString("N"))
+    : Path.GetFullPath(args[0]);
+using var outputReservation = CompatibilityOutputReservation.Acquire(outputRoot);
+var directory = Path.Combine(outputRoot, "compatibility-tests");
+var renderDirectory = Path.Combine(outputRoot, "visual-fidelity");
+var pdfFixtureDirectory = Path.Combine(outputRoot, "pdf-fixtures");
+Directory.CreateDirectory(directory); Directory.CreateDirectory(fixtureDirectory); Directory.CreateDirectory(renderDirectory); Directory.CreateDirectory(pdfFixtureDirectory);
 var page = new PdfPageInfo(1, 595.275590551d, 841.88976378d, 0, null, true, false, Array.Empty<PdfGlyph>());
 var document = new PdfDocumentInfo("image-geometry-compatibility-sample", 1, [page]);
 var png = Path.Combine(fixtureDirectory, "diagnostic-800x400.png"); var jpeg = Path.Combine(fixtureDirectory, "diagnostic-800x400.jpg");
@@ -17,10 +23,10 @@ await writer.WriteAsync(document, Path.Combine(directory, "16-image-jpeg-100x50m
 var inspector = new HwpxPackageInspector();
 foreach (var name in new[] { "15-image-png-100x50mm-golden-fixed.hwpx", "16-image-jpeg-100x50mm-golden-fixed.hwpx" }) { var path = Path.Combine(directory, name); var result = inspector.Inspect(path); var reopen = inspector.Inspect(path); if (result.Status == ValidationStatus.Fail || reopen.Status == ValidationStatus.Fail) throw new InvalidDataException(string.Join("; ", result.Issues.Select(i => i.Code))); Console.WriteLine($"{path} PASS {new FileInfo(path).Length} bytes"); }
 
-var pdfFixture = Path.Combine(root, "pdf-fixtures", "visual-fidelity-a4-portrait-1page.pdf"); Directory.CreateDirectory(Path.GetDirectoryName(pdfFixture)!); await File.WriteAllBytesAsync(pdfFixture, CreateVisualPdf());
+var pdfFixture = Path.Combine(pdfFixtureDirectory, "visual-fidelity-a4-portrait-1page.pdf"); await File.WriteAllBytesAsync(pdfFixture, CreateVisualPdf());
 var vf = new VisualFidelityConverter(new PdfPigAnalyzer(), new PdfiumPageRenderer(), writer, inspector);
 var candidates = new[] { (1L, "20a"), (2L, "20b"), (5L, "20c"), (10L, "20d"), (20L, "20e") };
-foreach (var (inset, label) in candidates) { var renderArtifact = Path.Combine(root, "visual-fidelity", $"{label}-a4-portrait-render-200dpi.png"); var vfResult = await vf.ConvertAsync(pdfFixture, Path.Combine(directory, $"{label}-visual-a4-inset-{inset}hu.hwpx"), new VisualFidelityOptions(RenderArtifactPath: renderArtifact, SafetyInsetHwpUnit: inset), CancellationToken.None); if (vfResult.Validation.Status == ValidationStatus.Fail || !vfResult.RenderHashPreserved) throw new InvalidDataException($"Visual Fidelity validation failed for {label}."); Console.WriteLine($"{vfResult.OutputPath} PASS {new FileInfo(vfResult.OutputPath).Length} bytes {vfResult.WidthPx}x{vfResult.HeightPx} inset={inset} hash={vfResult.RenderHashPreserved}"); }
+foreach (var (inset, label) in candidates) { var renderArtifact = Path.Combine(renderDirectory, $"{label}-a4-portrait-render-200dpi.png"); var vfResult = await vf.ConvertAsync(pdfFixture, Path.Combine(directory, $"{label}-visual-a4-inset-{inset}hu.hwpx"), new VisualFidelityOptions(RenderArtifactPath: renderArtifact, SafetyInsetHwpUnit: inset), CancellationToken.None); if (vfResult.Validation.Status == ValidationStatus.Fail || !vfResult.RenderHashPreserved) throw new InvalidDataException($"Visual Fidelity validation failed for {label}."); Console.WriteLine($"{vfResult.OutputPath} PASS {new FileInfo(vfResult.OutputPath).Length} bytes {vfResult.WidthPx}x{vfResult.HeightPx} inset={inset} hash={vfResult.RenderHashPreserved}"); }
 
 var backgroundDocument = await new PdfPigAnalyzer().AnalyzeAsync(pdfFixture, CancellationToken.None);
 var backgroundResource = new HwpxImageResourceWriter().Create(Path.Combine(root, "visual-fidelity", "19-a4-portrait-render-200dpi.png"), "image1", "image/png");
@@ -31,12 +37,12 @@ var backgroundReopen = inspector.Inspect(backgroundPath);
 if (backgroundValidation.Status == ValidationStatus.Fail || backgroundReopen.Status == ValidationStatus.Fail) throw new InvalidDataException("Page-background validation failed.");
 Console.WriteLine($"{backgroundPath} {backgroundValidation.Status} reopen={backgroundReopen.Status} {new FileInfo(backgroundPath).Length} bytes");
 
-var threePdf = Path.Combine(root, "pdf-fixtures", "visual-fidelity-a4-portrait-3pages.pdf");
+var threePdf = Path.Combine(pdfFixtureDirectory, "visual-fidelity-a4-portrait-3pages.pdf");
 await File.WriteAllBytesAsync(threePdf, CreateThreePagePdf());
 var threeDoc = await new PdfPigAnalyzer().AnalyzeAsync(threePdf, CancellationToken.None);
 var threeResources = new List<HwpxBinaryResource>();
 var threeRenderer = new PdfiumPageRenderer();
-for (var i = 1; i <= 3; i++) { var rp = Path.Combine(root, "visual-fidelity", $"23-page{i}-render-200dpi.png"); await threeRenderer.RenderAsync(new(threePdf, i, rp, 200), CancellationToken.None); threeResources.Add(new HwpxImageResourceWriter().Create(rp, $"image{i-1}", "image/png")); }
+for (var i = 1; i <= 3; i++) { var rp = Path.Combine(renderDirectory, $"23-page{i}-render-200dpi.png"); await threeRenderer.RenderAsync(new(threePdf, i, rp, 200), CancellationToken.None); threeResources.Add(new HwpxImageResourceWriter().Create(rp, $"image{i-1}", "image/png")); }
 var sample23 = Path.Combine(directory, "23-visual-fidelity-a4-portrait-3pages-e2e.hwpx");
 await writer.WritePageBackgroundsAsync(threeDoc, sample23, threeResources, CancellationToken.None);
 var v23 = inspector.Inspect(sample23); var r23 = inspector.Inspect(sample23); if (v23.Status == ValidationStatus.Fail || r23.Status == ValidationStatus.Fail) throw new InvalidDataException("3-page background validation failed."); Console.WriteLine($"{sample23} {v23.Status} reopen={r23.Status} {new FileInfo(sample23).Length} bytes");
