@@ -7,8 +7,8 @@ remove, duplicate and selection operations mutate only the logical sequence;
 source PDFs are never modified.
 
 Conversion jobs consume an immutable page snapshot and expose status/progress,
-cancellation and atomic output. `TempWorkspaceManager` isolates intermediate
-files below `%TEMP%\\PDF2HWP\\<job-id>`, while `PreviewThumbnailCache` is kept
+cancellation and atomic output. `ConversionWorkspaceFactory` isolates intermediate
+files below marked `%TEMP%\\PDF2HWP\\<job-id>` workspaces, while `PreviewThumbnailCache` is kept
 separate from full-resolution Visual Fidelity renders. Settings and recent
 files are JSON-only and contain paths/timestamps, never document contents.
 
@@ -32,7 +32,9 @@ silently treated as HWPX.
 
 Settings and recent files are stored under the user's LocalApplicationData
 folder. Conversion reports and diagnostics are explicit JSON exports. Startup
-cleanup removes only marked, stale `%TEMP%\\PDF2HWP` workspaces. The self-
+cleanup removes only marked, stale `%TEMP%\\PDF2HWP` workspaces. Visual Fidelity
+render artifacts use the same marked workspace, so a process crash leaves them
+eligible for stale cleanup. The self-
 contained Windows publish contract is `artifacts\\win-x64-singlefile\\PDF2HWP.exe`.
 
 Thumbnail rendering is lazy and viewport-driven: the page editor requests

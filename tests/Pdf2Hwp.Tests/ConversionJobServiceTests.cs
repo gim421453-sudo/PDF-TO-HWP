@@ -164,6 +164,108 @@ public sealed class ConversionJobServiceTests
         var logical = progress.Events.Where(e => e.Stage == "선택된 페이지 구성").ToArray(); Assert.Equal(5, logical.Length); Assert.Equal(Enumerable.Range(1, 5), logical.Select(e => e.Current)); Assert.All(logical, e => Assert.Equal(5, e.Total));
     }
 
+    [Fact]
+    public async Task Successful_visual_job_cleans_workspace_and_allows_the_next_job()
+    {
+        using var fixture = new WorkspaceFixture();
+        var renderer = new TrackingPageRenderer(fixture.Factory);
+        var service = CreateVisualService(fixture, renderer, new FakeInspector());
+
+        var first = await RunVisualJob(service, fixture, "normal");
+        fixture.AssertWorkspaceCleanup();
+        var next = await RunVisualJob(service, fixture, "normal-next");
+
+        Assert.True(File.Exists(first.Report.OutputPath));
+        Assert.True(File.Exists(next.Report.OutputPath));
+        fixture.AssertWorkspaceCleanup();
+    }
+
+    [Fact]
+    public async Task Cancellation_cleans_workspace_and_allows_the_next_job()
+    {
+        using var fixture = new WorkspaceFixture();
+        var renderer = new TrackingPageRenderer(fixture.Factory, blockFirstRender: true);
+        var service = CreateVisualService(fixture, renderer, new FakeInspector());
+        using var cancellation = new CancellationTokenSource();
+        var run = RunVisualJob(service, fixture, "cancelled", cancellation.Token);
+        await renderer.FirstRenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        fixture.AssertActiveMarkerPresent();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.False(File.Exists(Path.Combine(fixture.OutputDirectory, "cancelled.hwpx")));
+        Assert.Empty(Directory.GetFiles(fixture.OutputDirectory, "*.partial-*"));
+        fixture.AssertWorkspaceCleanup();
+        var next = await RunVisualJob(service, fixture, "cancelled-retry");
+
+        Assert.True(File.Exists(next.Report.OutputPath));
+        fixture.AssertWorkspaceCleanup();
+    }
+
+    [Fact]
+    public async Task Render_failure_cleans_workspace_and_allows_the_next_job()
+    {
+        using var fixture = new WorkspaceFixture();
+        var renderer = new TrackingPageRenderer(fixture.Factory, failFirstRender: true);
+        var service = CreateVisualService(fixture, renderer, new FakeInspector());
+
+        await Assert.ThrowsAsync<IOException>(() => RunVisualJob(service, fixture, "render-failure"));
+
+        Assert.False(File.Exists(Path.Combine(fixture.OutputDirectory, "render-failure.hwpx")));
+        Assert.Empty(Directory.GetFiles(fixture.OutputDirectory, "*.partial-*"));
+        fixture.AssertWorkspaceCleanup();
+        var next = await RunVisualJob(service, fixture, "render-retry");
+
+        Assert.True(File.Exists(next.Report.OutputPath));
+        fixture.AssertWorkspaceCleanup();
+    }
+
+    [Fact]
+    public async Task Validation_failure_cleans_workspace_and_allows_the_next_job()
+    {
+        using var fixture = new WorkspaceFixture();
+        var renderer = new TrackingPageRenderer(fixture.Factory);
+        var service = CreateVisualService(fixture, renderer, new FailFirstInspector(fixture.Factory));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => RunVisualJob(service, fixture, "validation-failure"));
+
+        Assert.False(File.Exists(Path.Combine(fixture.OutputDirectory, "validation-failure.hwpx")));
+        Assert.Empty(Directory.GetFiles(fixture.OutputDirectory, "*.partial-*"));
+        fixture.AssertWorkspaceCleanup();
+        var next = await RunVisualJob(service, fixture, "validation-retry");
+
+        Assert.True(File.Exists(next.Report.OutputPath));
+        fixture.AssertWorkspaceCleanup();
+    }
+
+    [Fact]
+    public async Task Publish_failure_cleans_workspace_preserves_collision_and_allows_the_next_job()
+    {
+        using var fixture = new WorkspaceFixture();
+        var renderer = new TrackingPageRenderer(fixture.Factory);
+        var inspector = new PublishCollisionInspector(fixture.Factory, fixture.OutputDirectory, "publish-failure.hwpx");
+        var service = CreateVisualService(fixture, renderer, inspector);
+
+        await Assert.ThrowsAsync<IOException>(() => RunVisualJob(service, fixture, "publish-failure"));
+
+        var collidedOutput = Path.Combine(fixture.OutputDirectory, "publish-failure.hwpx");
+        Assert.Equal("external collision", File.ReadAllText(collidedOutput));
+        Assert.Empty(Directory.GetFiles(fixture.OutputDirectory, "*.partial-*"));
+        Assert.Empty(Directory.GetFiles(fixture.OutputDirectory, ".*.tmp"));
+        fixture.AssertWorkspaceCleanup();
+        var next = await RunVisualJob(service, fixture, "publish-retry");
+
+        Assert.True(File.Exists(next.Report.OutputPath));
+        Assert.Equal("external collision", File.ReadAllText(collidedOutput));
+        fixture.AssertWorkspaceCleanup();
+    }
+
+    private static ConversionJobService CreateVisualService(WorkspaceFixture fixture, IPdfPageRenderer renderer, IHwpxPackageInspector inspector)
+        => new(new FakeAnalyzer(), new FakeWriter(), inspector, renderer, new HwpxImagePackageWriter(), fixture.Factory);
+
+    private static Task<ConversionJobResult> RunVisualJob(ConversionJobService service, WorkspaceFixture fixture, string outputName, CancellationToken token = default)
+        => service.RunAsync([DocumentPage.FromSource(SourceDocument.Create(fixture.SourcePath, 1), 0)], fixture.OutputDirectory, RenderQuality.Standard, null, token, outputName);
+
     private static async Task<(ConversionJobResult? Result, Exception? Error)> Capture(Task<ConversionJobResult> task)
     { try { return (await task, null); } catch (Exception ex) { return (null, ex); } }
 
@@ -192,6 +294,103 @@ public sealed class ConversionJobServiceTests
         public ManualResetEventSlim Entered { get; } = new();
         public ManualResetEventSlim Release { get; } = new();
         public ValidationReport Inspect(string path) { Entered.Set(); Release.Wait(TimeSpan.FromSeconds(5)); return new(ValidationStatus.Pass, []); }
+    }
+    private sealed class TrackingPageRenderer(TrackingWorkspaceFactory factory, bool failFirstRender = false, bool blockFirstRender = false) : IPdfPageRenderer
+    {
+        private int _calls;
+        public TaskCompletionSource FirstRenderStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task RenderAsync(RenderRequest request, CancellationToken token)
+        {
+            factory.AssertActiveMarkerPresent();
+            var call = Interlocked.Increment(ref _calls);
+            FirstRenderStarted.TrySetResult();
+            if (call == 1 && blockFirstRender) await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            if (call == 1 && failFirstRender) throw new IOException("synthetic render failure");
+            await File.WriteAllBytesAsync(request.OutputPngPath, Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="), token);
+        }
+    }
+    private sealed class FailFirstInspector(TrackingWorkspaceFactory factory) : IHwpxPackageInspector
+    {
+        private int _calls;
+        public ValidationReport Inspect(string path)
+        {
+            factory.AssertActiveMarkerPresent();
+            return Interlocked.Increment(ref _calls) == 1
+                ? new(ValidationStatus.Fail, [new ValidationIssue(ValidationStatus.Fail, null, "synthetic-validation-failure", "synthetic validation failure")])
+                : new(ValidationStatus.Pass, []);
+        }
+    }
+    private sealed class PublishCollisionInspector(TrackingWorkspaceFactory factory, string outputDirectory, string targetName) : IHwpxPackageInspector
+    {
+        private int _calls;
+        public ValidationReport Inspect(string path)
+        {
+            factory.AssertActiveMarkerPresent();
+            if (Interlocked.Increment(ref _calls) == 1) File.WriteAllText(Path.Combine(outputDirectory, targetName), "external collision");
+            return new(ValidationStatus.Pass, []);
+        }
+    }
+    private sealed class TrackingWorkspaceFactory : IConversionWorkspaceFactory
+    {
+        private readonly ConversionWorkspaceFactory _inner = new();
+        private readonly List<string> _paths = [];
+        public IReadOnlyList<string> Paths { get { lock (_paths) return _paths.ToArray(); } }
+        public IConversionWorkspace Create()
+        {
+            var workspace = _inner.Create();
+            lock (_paths) _paths.Add(workspace.DirectoryPath);
+            return new TrackedWorkspace(workspace);
+        }
+        public int CleanupStale(TimeSpan olderThan) => _inner.CleanupStale(olderThan);
+        public void AssertActiveMarkerPresent()
+        {
+            var path = Paths.LastOrDefault();
+            Assert.NotNull(path);
+            Assert.True(File.Exists(Path.Combine(path!, ".pdf2hwp-workspace")));
+            Assert.True(File.Exists(Path.Combine(path!, ".active")));
+        }
+        public void AssertAllDisposed()
+        {
+            Assert.NotEmpty(Paths);
+            foreach (var path in Paths)
+            {
+                Assert.False(Directory.Exists(path));
+                Assert.False(File.Exists(Path.Combine(path, ".active")));
+                Assert.False(File.Exists(Path.Combine(path, ".pdf2hwp-workspace")));
+            }
+        }
+        private sealed class TrackedWorkspace(IConversionWorkspace inner) : IConversionWorkspace
+        {
+            public string DirectoryPath => inner.DirectoryPath;
+            public string CreateFilePath(string extension) => inner.CreateFilePath(extension);
+            public void Dispose() => inner.Dispose();
+        }
+    }
+    private sealed class WorkspaceFixture : IDisposable
+    {
+        private readonly TempDirectory _directory = new();
+        private readonly string _unrelatedPath;
+        private const string ActiveContents = "unrelated active workspace";
+        public string OutputDirectory { get; }
+        public string SourcePath { get; }
+        public TrackingWorkspaceFactory Factory { get; } = new();
+        public WorkspaceFixture()
+        {
+            OutputDirectory = Path.Combine(_directory.Path, "output"); Directory.CreateDirectory(OutputDirectory);
+            SourcePath = Path.Combine(_directory.Path, "source.pdf"); File.WriteAllText(SourcePath, "placeholder");
+            _unrelatedPath = Path.Combine(_directory.Path, "unrelated-job"); Directory.CreateDirectory(_unrelatedPath);
+            File.WriteAllText(Path.Combine(_unrelatedPath, ".pdf2hwp-workspace"), "unrelated marker");
+            File.WriteAllText(Path.Combine(_unrelatedPath, ".active"), ActiveContents);
+        }
+        public void AssertActiveMarkerPresent() => Factory.AssertActiveMarkerPresent();
+        public void AssertWorkspaceCleanup()
+        {
+            Factory.AssertAllDisposed();
+            Assert.True(Directory.Exists(_unrelatedPath));
+            Assert.Equal("unrelated marker", File.ReadAllText(Path.Combine(_unrelatedPath, ".pdf2hwp-workspace")));
+            Assert.Equal(ActiveContents, File.ReadAllText(Path.Combine(_unrelatedPath, ".active")));
+        }
+        public void Dispose() => _directory.Dispose();
     }
     private sealed class ProgressRecorder : IProgress<ConversionProgress> { public List<ConversionProgress> Events { get; } = []; public void Report(ConversionProgress value) => Events.Add(value); }
     private sealed class TempDirectory : IDisposable { public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N")); public TempDirectory() => Directory.CreateDirectory(Path); public void Dispose() { try { Directory.Delete(Path, true); } catch { } } }
