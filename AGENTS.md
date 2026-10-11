@@ -25,30 +25,16 @@ OWNER: Codex
 - 연동 때문에 현재 프로젝트의 구조를 크게 바꾸지 않는다.
 
 ## 현재 저장소 상태 (2026-10-12)
-- 목적 및 브랜치: P1 CropBox 및 P2-1~P2-4 수정이 `main`/`origin/main` `cd09492`에 통합·푸시됐다. 현재 작업 브랜치는 `codex/p2-5-reuse-pdf-hash`이며 P2-5 해시 캐시 초안을 작성 중이다.
-- 검증: 각 작업 브랜치에서 SDK `10.0.401`로 `eng/verify.ps1` PASS (각각 Restore/Release Build/Test, 111/111; 산출물 `20261010-131019`, `20261010-131620`, `20261010-131741`, `20261010-131840`). 병합 후 통합 검증은 NOT RUN. 병합 충돌 해결 후 `git diff --cached --check` PASS. 한컴오피스 수동 검증과 라이선스 자산 검증은 NOT VERIFIED/NOT RUN.
-- 해결된 P1: PDFium이 기본 CropBox 클리핑을 이미 적용하는데 같은 PDF 절대좌표를 `Bounds`로 다시 전달해 픽셀이 손실되던 문제. `PdfiumPageRenderer`에서 중복 Bounds를 제거했고, 비대칭 오프셋 CropBox를 회전 0/90/180/270에서 검증하는 픽셀 회귀를 추가했다.
-- 해결된 P2-1: JSON에서 다시 읽은 레코드의 중첩 목록은 참조 비교되므로 UI의 `IndexOf`가 -1을 반환하던 문제. 저장소가 전체 필드를 값으로 비교해 선택 레코드를 제거하며, 회귀 테스트는 기존 코드에서 실패하고 수정 후 통과했다. 출력 파일은 삭제하지 않는다.
-- 해결된 P2-2: 변환 시도 시작 시 이전 페이지 스냅샷을 비우고 종료 때 정리해 새 시도의 사전 검증 실패가 이전 작업 결과로 기록되지 않게 했다. Core snapshot lifecycle 회귀 테스트를 추가했다.
-- 해결된 P2-3: 결과 폴더 열기, 보고서 내보내기, 진단 열기의 동기 예외를 UI 오류 매퍼로 변환해 상태에 표시하고, 결과 폴더 누락도 상태로 알린다. GUI 수동 재현은 NOT RUN.
-- 해결된 P2-4: PDF 일괄 추가를 파일별 실패 격리로 바꿔 한 파일 분석 실패 후에도 나머지 파일 처리를 계속한다. 취소는 계속 전파한다. 실패한 항목을 확인하는 회귀 테스트를 추가했다. 실제 혼합 PDF GUI 검증은 NOT RUN.
-- P2-5 초안: 한 작업 안에서 경로별 파일 길이와 수정 시각을 기준으로 원본 해시를 재사용하고, fingerprint가 바뀌면 재해시하도록 구현했다. 동작 검증은 NOT RUN.
-- 남은 P2: 샘플 생성기가 보호 파일 #23을 덮어쓸 수 있음(`CompatibilitySampleGenerator/Program.cs:40-42`, writer overwrite true).
-- P3/품질: 크래시 후 표시 없는 렌더 임시 폴더 잔존 가능, HWP 미지원인데 UI/패키지 설명은 HWP를 표방, 회전/크롭 편집 연산은 UI에 노출되지 않음, 진단 잔여물 `run.err`/`run.out`/`section18.xml`이 추적됨, HWPX inspector가 섹션 배경 참조를 완전히 확인하지 않음.
-- 보호/미검증: 샘플 #23 자동 구조 검사는 PASS(검사 전후 해시 일치, 3개 섹션), Hancom 실제 열기는 Computer Use helper 오류로 NOT VERIFIED. `docs/recovery/` 파일 7개는 추적 중이며 수정하지 않는다. 샘플 생성 도구는 실행하지 않는다.
-- 라이선스: `eng/verify-license-assets.ps1`은 AGENTS 지침에 따라 이번에 실행하지 않았다. 기본 셸은 PS 5.1이나 PATH에 관리 런타임 `pwsh 7.6.5`가 발견됐다. 마지막 기록 검증은 2026-09-28이다.
-- 다음 단계: 해시 캐시 경로에서 중복 source hash 호출이 사라지는지 회귀 테스트를 설계하고, 파일 fingerprint 변경 시 재해시되는지 확인한다. 사용자 검토 전에는 커밋하지 않는다. 교차 기기 준비도 `READY_WITH_WARNINGS` (현재 브랜치 변경 미커밋·미푸시, 검증 NOT RUN).
-- 이번 브랜치 변경 파일: `src/Pdf2Hwp.Infrastructure/PreviewThumbnails.cs`, `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`. 의존성과 보호 자료는 변경하지 않았다.
-## 2026-10-12 후속 브랜치 통합 준비 상태
-
-- 기준 `main`/`origin/main`은 `cd09492a0c50d46c8d3e727bad6f8cb050bc8491`이다. 다섯 대상은 모두 이 기준에서 독립적으로 시작했고 stacked 관계가 없다. 소스 변경은 서로 겹치지 않으며 AGENTS와 핸드오프 문서가 공통으로 겹친다. CHANGELOG도 세 브랜치에서 겹친다.
-- P2-5는 Windows 파일 길이, 마지막 쓰기 시각, 파일 시스템 변경 시각을 SHA 캐시 지문에 포함한다. 변경 시각을 안전하게 얻지 못하면 캐시 재사용을 하지 않는다. 동일 경로·길이·마지막 쓰기 시각에서 PDF 본문만 바뀌는 회귀 테스트를 추가했다.
-- P2-6은 출력 디렉터리 내부의 배타 예약 파일을 원자적으로 확보한 후에만 샘플 파일을 생성한다. 동시 예약은 하나만 성공하고, 기존 비어 있지 않은 디렉터리는 보존한다. 생성기는 실행하지 않았다.
-- 임시 작업공간 테스트는 정상 완료, 취소, 렌더 실패, 검증 실패, 게시 실패를 실행해 workspace 및 active 표식 정리, 결과 파일 상태, 다음 작업 실행, 다른 작업 폴더 보존을 확인한다.
-- 출력 문구 검토 결과 UI 형식과 패키지 설명은 HWPX Visual Fidelity 지원 상태에 맞고, HWP 바이너리 출력 지원을 주장하지 않는다.
-- Hancom 수동 확인은 `HANCOM_3PAGE_MANUAL_REQUIRED`다. 수동 검증 전 `FULL_COMPATIBILITY` 선언 금지. 보호 샘플 #23 SHA-256: `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`.
-- SDK 10.0.401 `eng/verify.ps1`: P2-5 115/115, P2-6 116/116, Hancom 114/114, 출력 문구 114/114, 임시 작업공간 119/119. 전부 Restore/Release Build/Test PASS, 실패 0, 건너뜀 0. 각 브랜치 `git diff --check` PASS.
-- 병합 전 준비 상태다. 예정 순서는 P2-5 → P2-6 → 임시 작업공간 → 출력 문구 → Hancom 메모이며, 각 병합 후와 통합 main 검증이 남았다. 푸시는 하지 않았다. READY_WITH_WARNINGS.
+- 저장소 PDF2HWP의 현재 브랜치는 main이다. 다섯 후속 브랜치 커밋은 모두 독립 분기 기준 cd09492에서 시작해 일반 병합으로 통합됐다. 작업 브랜치 커밋은 P2-5 ba06748, P2-6 d3ed42e, 임시 작업공간 c8f10b3, 출력 문구 e39474a, Hancom 게이트 9270ca3이며, 마지막 코드 병합 커밋은 6c701c7이다.
+- P2-5는 파일 길이·마지막 쓰기 시각·Windows 파일 시스템 변경 시각을 SHA 캐시 지문으로 사용한다. 신뢰할 변경 시각을 읽지 못하면 해시 캐시를 사용하지 않는다. 동일 경로·길이·마지막 쓰기 시각에서 PDF 내용만 바꾸는 회귀 테스트 PASS.
+- P2-6은 CompatibilityOutputReservation으로 비어 있는 출력 디렉터리 예약 표식을 원자적으로 획득한다. 같은 경로를 동시에 요청하면 한 실행만 획득하고 다른 실행은 안전 실패한다. 기존 파일을 덮어쓰지 않으며 패배한 실행은 산출물을 만들지 않는다. 생성기 자체는 실행하지 않았다.
+- P3 임시 작업공간은 실제 ConversionWorkspaceFactory를 사용해 정상 완료·취소·렌더 실패·검증 실패·게시 실패 때 작업 디렉터리와 active 표식 정리를 확인했다. 다음 작업 재실행과 다른 작업 디렉터리 보존도 검사했다.
+- 출력 UI 및 패키지 설명은 HWPX Visual Fidelity만 표시한다. HWP 바이너리 출력은 미지원이다.
+- Hancom 수동 게이트는 HANCOM_3PAGE_MANUAL_REQUIRED로 유지한다. 수동 확인 전 FULL_COMPATIBILITY를 선언하지 않는다.
+- SDK 10.0.401 기준 각 브랜치 Restore/Release Build/Test PASS: P2-5 115/115, P2-6 116/116, Hancom 114/114, 출력 문구 114/114, 임시 작업공간 119/119. 각 병합 뒤 전체 검증도 PASS, 최종 main은 122/122, 실패 0, 건너뜀 0. git diff --check PASS.
+- 보호 샘플 #23은 SHA-256 CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED이며 변경되지 않았다. Golden 참조 파일도 추적 상태로 보존됐고 SHA-256 CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D다. docs/recovery는 수정하지 않았고 샘플 생성기를 실행하지 않았다.
+- 미검증 상태는 Hancom 수동 열기, WPF GUI 스모크, 라이선스 자산 검사다. eng/verify-license-assets.ps1은 저장소 지침에 따라 실행하지 않았다. origin/main은 cd09492이고 병합은 로컬에만 있으며 푸시하지 않았다. 교차 기기 준비도 READY_WITH_WARNINGS다.
+- 다음 단계: UI helper가 복구되면 보호 샘플 #23을 열기만 하고 저장하지 않은 채 Hancom 수동 확인을 수행하고 해시를 다시 확인한다. 원격 동기화는 별도 요청 후 진행한다.
 # Cross-device continuation policy
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
