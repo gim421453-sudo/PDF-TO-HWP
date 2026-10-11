@@ -89,6 +89,37 @@ public sealed class AutomationExpansionTests
     }
 
     [Fact]
+    public async Task Same_length_pdf_content_change_with_restored_last_write_time_does_not_reuse_stale_hash()
+    {
+        using var d = new TempDirectory();
+        var source = Path.Combine(d.Path, "a.pdf");
+        var original = MinimalPdf.Create();
+        var changedText = System.Text.Encoding.ASCII.GetString(original).Replace("(Page 1)", "(Page 2)", StringComparison.Ordinal);
+        var changedBytes = System.Text.Encoding.ASCII.GetBytes(changedText);
+        Assert.Equal(original.Length, changedBytes.Length);
+        Assert.NotEqual(original, changedBytes);
+        await File.WriteAllBytesAsync(source, original);
+        var originalLastWriteTime = File.GetLastWriteTimeUtc(source);
+        var page = DocumentPage.FromSource(SourceDocument.Create(source, 1), 0);
+        var fake = new CountingPdfRenderer();
+        var cache = new JobRenderCache(fake, Path.Combine(d.Path, "job"));
+
+        var first = await cache.RenderAsync(page, 200, CancellationToken.None);
+        if (OperatingSystem.IsWindows()) Assert.Equal(1, GetCachedSourceHashCount(cache));
+        await Task.Delay(20);
+        await File.WriteAllBytesAsync(source, changedBytes);
+        File.SetLastWriteTimeUtc(source, originalLastWriteTime);
+
+        Assert.Equal(original.Length, new FileInfo(source).Length);
+        Assert.Equal(originalLastWriteTime, File.GetLastWriteTimeUtc(source));
+        var changed = await cache.RenderAsync(page, 200, CancellationToken.None);
+
+        Assert.Equal(2, fake.Count);
+        Assert.NotEqual(first.Key.SourceHash, changed.Key.SourceHash);
+        if (OperatingSystem.IsWindows()) Assert.Equal(1, GetCachedSourceHashCount(cache));
+    }
+
+    [Fact]
     public async Task DuplicateLogicalPagesRenderOneRasterButRemainSeparateLogicalEntries()
     {
         using var d = new TempDirectory(); var source = Path.Combine(d.Path, "a.pdf"); File.WriteAllText(source, "a"); var page = DocumentPage.FromSource(SourceDocument.Create(source, 3), 1);
@@ -163,6 +194,12 @@ public sealed class AutomationExpansionTests
             if (failFirst && count == 1) throw new IOException("synthetic render failure");
             await File.WriteAllBytesAsync(request.OutputPngPath, Png1x1, token);
         }
+    }
+    private static int GetCachedSourceHashCount(JobRenderCache cache)
+    {
+        var field = typeof(JobRenderCache).GetField("_sourceHashes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var count = field.FieldType.GetProperty("Count")!;
+        return (int)count.GetValue(field.GetValue(cache))!;
     }
     private sealed class TempDirectory : IDisposable { public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N")); public TempDirectory() => Directory.CreateDirectory(Path); public void Dispose() { try { Directory.Delete(Path, true); } catch { } } }
 }
