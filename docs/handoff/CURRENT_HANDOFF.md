@@ -1,7 +1,18 @@
 # Current Project Handoff
 
-Last updated: 2026-10-10 (Asia/Seoul)
-Status: P2_1_TO_P2_4_FIXED / READY_WITH_WARNINGS
+Last updated: 2026-10-12 (Asia/Seoul)
+Status: FOLLOWUP_BRANCHES_PREPARED / READY_WITH_WARNINGS
+
+## 2026-10-12 후속 브랜치 통합 준비 상태
+
+- 기준 `main`/`origin/main`은 `cd09492a0c50d46c8d3e727bad6f8cb050bc8491`이다. 다섯 대상은 모두 이 기준에서 독립적으로 시작했고 stacked 관계가 없다. 소스 변경은 서로 겹치지 않으며 AGENTS와 핸드오프 문서가 공통으로 겹친다. CHANGELOG도 세 브랜치에서 겹친다.
+- P2-5는 Windows 파일 길이, 마지막 쓰기 시각, 파일 시스템 변경 시각을 SHA 캐시 지문에 포함한다. 변경 시각을 안전하게 얻지 못하면 캐시 재사용을 하지 않는다. 동일 경로·길이·마지막 쓰기 시각에서 PDF 본문만 바뀌는 회귀 테스트를 추가했다.
+- P2-6은 출력 디렉터리 내부의 배타 예약 파일을 원자적으로 확보한 후에만 샘플 파일을 생성한다. 동시 예약은 하나만 성공하고, 기존 비어 있지 않은 디렉터리는 보존한다. 생성기는 실행하지 않았다.
+- 임시 작업공간 테스트는 정상 완료, 취소, 렌더 실패, 검증 실패, 게시 실패를 실행해 workspace 및 active 표식 정리, 결과 파일 상태, 다음 작업 실행, 다른 작업 폴더 보존을 확인한다.
+- 출력 문구 검토 결과 UI 형식과 패키지 설명은 HWPX Visual Fidelity 지원 상태에 맞고, HWP 바이너리 출력 지원을 주장하지 않는다.
+- Hancom 수동 확인은 `HANCOM_3PAGE_MANUAL_REQUIRED`다. 수동 검증 전 `FULL_COMPATIBILITY` 선언 금지. 보호 샘플 #23 SHA-256: `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`.
+- SDK 10.0.401 `eng/verify.ps1`: P2-5 115/115, P2-6 116/116, Hancom 114/114, 출력 문구 114/114, 임시 작업공간 119/119. 전부 Restore/Release Build/Test PASS, 실패 0, 건너뜀 0. 각 브랜치 `git diff --check` PASS.
+- 병합 전 준비 상태다. 예정 순서는 P2-5 → P2-6 → 임시 작업공간 → 출력 문구 → Hancom 메모이며, 각 병합 후와 통합 main 검증이 남았다. 푸시는 하지 않았다. READY_WITH_WARNINGS.
 
 ## Project
 
@@ -10,7 +21,7 @@ Status: P2_1_TO_P2_4_FIXED / READY_WITH_WARNINGS
 
 ## 이번 수정
 
-목표: 미통합 작업 브랜치 네 개를 `main`에 병합하고, 병합 결과와 다음 작업을 기록한다.
+목표: 보호된 기존 샘플 #23을 Hancom Office 2024에서 열기만 하여 수동 렌더 검증을 시작한다.
 
 ### 저장소 기준 상태
 
@@ -20,7 +31,9 @@ Status: P2_1_TO_P2_4_FIXED / READY_WITH_WARNINGS
 - P2-2: 매 변환 시도 전에 스냅샷을 초기화하고 종료 때 정리해, 새 작업의 사전 검증 실패가 이전 작업 페이지를 실패 기록으로 남기지 않게 했다.
 - P2-3: 결과 폴더 열기, 보고서 내보내기, 진단 열기의 동기 예외를 오류 메시지로 변환해 UI 상태에 표시한다. 결과 폴더 누락도 표시한다.
 - P2-4: PDF 일괄 추가에서 파일별 예외를 격리해 실패 파일 이후 항목도 처리하고, 취소는 계속 전파하도록 했다.
-- 원격 푸시는 자동 승인 검토에서 거부되어 수행하지 않았다. 검토에서 확인이 요구된 대상은 `origin` (`https://github.com/gim421453-sudo/PDF-TO-HWP`)이며, main과 P2-2~P2-4 브랜치는 원격 미동기화 상태다. P2-1 브랜치는 이미 원격에 존재한다.
+- 이전 통합 커밋 `cd09492`는 `origin/main`에 푸시됐고 P2-2~P2-4 작업 브랜치도 원격에 게시됐다.
+- 이번에 UI 상태 확인을 시도했으나 CUA가 `trusted Node process exited unexpectedly; kernel reset`로 종료됐다. Hancom 창을 제어할 수 없었고 샘플 #23을 열거나 수정하지 않았다. 이전 기록에도 Computer Use helper 초기화 오류가 남아 있다.
+- 이 브랜치에서 샘플의 경로/파일 내용은 변경하지 않는다. helper가 복구되면 기존 샘플을 읽기 전용으로 열고, 화면 표시·페이지 수·전후 SHA-256만 기록한 뒤 저장하지 않고 닫는다.
 - `docs/recovery/`의 7개 파일은 Git 추적 대상이다. 보호 사용자 자료로 취급해 열람·수정하지 않았다.
 
 ### 검증 결과
@@ -28,7 +41,7 @@ Status: P2_1_TO_P2_4_FIXED / READY_WITH_WARNINGS
 - P2-1 회귀 `Removing_a_selected_history_entry_loaded_from_json_removes_only_that_entry`: 원래 구현에서 실패 재현, 수정 후 PASS.
 - P2-2 회귀 `Starting_a_conversion_attempt_clears_the_previous_job_snapshot`: PASS. P2-3 오류 매핑 회귀 `User_operation_guard_returns_a_mapped_error_instead_of_throwing`: PASS. P2-4 파일별 실패 격리 회귀 `Batch_processing_continues_after_an_item_fails`: PASS.
 - 각 작업 브랜치에서 SDK `10.0.401`, `VSTEST_CONNECTION_TIMEOUT=300`로 `eng/verify.ps1` 수행: Restore PASS / Release Build PASS / Test PASS, 각각 **111/111 통과, 실패 0, 건너뜀 0**. 산출물: `artifacts/verification/20261010-131019`, `20261010-131620`, `20261010-131741`, `20261010-131840`.
-- 병합 충돌은 테스트 메서드 병합 및 문서 충돌 해결로 정리했다. 통합 후 `eng/verify.ps1` 재실행은 NOT RUN. 병합 단계의 `git diff --cached --check`는 PASS.
+- 수동 한컴 검증은 BLOCKED/NOT RUN. UI helper 오류 이후 샘플은 열지 않았다. 코드 테스트는 해당 없음.
 - 이전 P1 CropBox 회귀는 각 전체 테스트에 계속 포함됐다. 비대칭 CropBox의 4방향 회전 픽셀 검사는 PASS.
 - 샘플 #23 자동 구조 테스트 `PdfPipelineTests.Sample23_is_inspected_without_modification_and_keeps_manual_gate`: PASS. 검사 전후 SHA-256 일치와 3개 섹션을 확인한다. 현재 SHA-256 `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`.
 - Hancom Office 2024 수동 열기는 NOT VERIFIED. 실행 파일은 설치돼 있지만 Computer Use helper가 `windows sandbox failed: helper_unknown_error: setup refresh had errors`로 두 번 초기화되지 않아 문서를 열지 못했다.
@@ -64,16 +77,15 @@ Status: P2_1_TO_P2_4_FIXED / READY_WITH_WARNINGS
 
 ## 우선 다음 단계
 
-1. 원격 푸시 확인을 받은 뒤 `main`과 미푸시 작업 브랜치 세 개를 `origin`에 푸시하고 원격 추적 상태를 확인한다.
-2. 다음 코드 작업은 P2-5 원본 PDF 해시 재사용이다 (`src/Pdf2Hwp.Core/PreviewThumbnails.cs:27-30`). 캐시 miss 경로와 renderer 간에 해시를 재사용하는 회귀/성능 검증을 먼저 설계한다.
-3. 이어 P2-6 샘플 생성기의 보호 샘플 덮어쓰기 방지 경로를 별도 작업으로 다룬다. 기존 샘플 생성 도구는 안전성 수정 전 실행하지 않는다.
-4. Hancom 수동 검증은 helper 복구 후 기존 샘플 #23을 열기만 하고 저장하지 않는다.
+1. Computer Use helper 복구 후 기존 `artifacts/compatibility-tests/23-visual-fidelity-a4-portrait-3pages-e2e.hwpx`를 열기만 하고 저장하지 않는다.
+2. 열기 전/후 SHA-256 일치와 Hancom의 페이지 렌더를 기록한다. 화면 조작이 다시 실패하면 NOT VERIFIED로 유지한다.
+3. 샘플 생성기와 보호 파일을 덮어쓸 수 있는 도구는 이 검증에서 실행하지 않는다.
 
 ## 환경 및 Git 상태
 
 - Windows x64, .NET SDK 8.0.425 선택 검증 PASS. 현재 PC에는 SDK 10.0.401도 설치돼 있으므로 SDK 8만 설치된 시스템과 동일하지 않다.
 - 기본 셸 PowerShell 5.1.26100; 관리 경로에서 `pwsh 7.6.5` 발견. 외부 서비스는 로컬 검증에 필요하지 않다. 비밀값은 기록하지 않는다.
-- 브랜치 `main`, 코드 통합 HEAD `9e24dcb`; 원격 `origin/main`은 `7d5210b`, 코드 통합 직후 main은 8개 커밋 앞섰다. AGENTS/CHANGELOG/핸드오프 동기화를 별도 일반 커밋으로 기록해 현재 main은 원격보다 9개 커밋 앞선다. 브랜치 전환·커밋·병합은 사용자 요청에 따라 수행했으나, 원격 전송은 자동 승인 검토가 거부해 보류 중이다.
+- 브랜치 `codex/p3-hancom-manual-check`, 분기 기준/원격 `main` HEAD `cd09492`. 이전 main/feature push는 완료됐다. 이 브랜치에는 handoff 기록만 미커밋으로 있다.
 - 작업 브랜치 커밋: `codex/fix-history-delete` `77e1eea` (이미 원격 존재), `codex/fix-stale-history-snapshot` `59bd2c3`, `codex/fix-ui-export-errors` `c8edc18`, `codex/fix-batch-pdf-import` `543e7e0`. 세 후자 브랜치는 아직 원격 미푸시.
-- 이번 병합에서 수정/통합한 파일은 `AGENTS.md`, `CHANGELOG.md`, `docs/handoff/CURRENT_HANDOFF.md`, `src/Pdf2Hwp.App/MainWindow.xaml.cs`, `src/Pdf2Hwp.Core/ApplicationContracts.cs`, `src/Pdf2Hwp.Core/BatchProcessor.cs`, `tests/Pdf2Hwp.Tests/ApplicationServicesTests.cs`. 검증 산출물은 ignore 대상 `artifacts/verification/20261010-131019/` 등이며, 의존성 및 보호 파일은 미변경.
-- 문서 동기화 커밋을 포함한 작업 트리는 깨끗하다. 병합 후 통합 검증 미실행과 원격 미동기화가 남아 교차 기기 상태는 `READY_WITH_WARNINGS`다.
+- 이번 브랜치에서는 `AGENTS.md`와 `docs/handoff/CURRENT_HANDOFF.md`만 갱신했다. 보호 샘플, 코드, 의존성은 변경하지 않았다.
+- UI helper 복구 전까지 검증은 BLOCKED이며 교차 기기 상태는 `READY_WITH_WARNINGS`다.
