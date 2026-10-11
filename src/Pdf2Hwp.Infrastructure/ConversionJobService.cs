@@ -16,7 +16,8 @@ public sealed class ConversionJobService(
     IHwpxWriter writer,
     IHwpxPackageInspector inspector,
     IPdfPageRenderer? pageRenderer = null,
-    HwpxImagePackageWriter? imageWriter = null) : IConversionJobRunner
+    HwpxImagePackageWriter? imageWriter = null,
+    IConversionWorkspaceFactory? workspaceFactory = null) : IConversionJobRunner
 {
     public async Task<ConversionJobResult> RunAsync(
         IReadOnlyList<DocumentPage> pages,
@@ -63,7 +64,7 @@ public sealed class ConversionJobService(
         var documentInput = new PdfDocumentInfo(snapshot[0].SourcePath, selectedPages.Length, selectedPages);
         var target = OutputNamingPolicy.Choose(outputDirectory, snapshot[0].SourcePath, combined: true, requestedStem: outputName);
         var temporary = target + ".partial-" + Guid.NewGuid().ToString("N");
-        var renderDirectory = Path.Combine(Path.GetTempPath(), "PDF2HWP", jobId.ToString("N"));
+        var renderWorkspace = pageRenderer is null ? null : (workspaceFactory ?? new ConversionWorkspaceFactory()).Create();
         try
         {
             if (pageRenderer is null)
@@ -75,7 +76,7 @@ public sealed class ConversionJobService(
             else
             {
                 var converter = new VisualFidelityConverter(analyzer, pageRenderer, imageWriter ?? new HwpxImagePackageWriter(), inspector);
-                var visualResult = await converter.ConvertPagesAsync(documentInput, snapshot, temporary, renderDirectory, quality, progress, cancellationToken).ConfigureAwait(false);
+                var visualResult = await converter.ConvertPagesAsync(documentInput, snapshot, temporary, renderWorkspace!.DirectoryPath, quality, progress, cancellationToken).ConfigureAwait(false);
                 renderDuration += visualResult.RenderDuration;
                 writeDuration += visualResult.WriteDuration;
                 for (var index = 0; index < snapshot.Length; index++)
@@ -102,7 +103,11 @@ public sealed class ConversionJobService(
             var publishWatch = Stopwatch.StartNew(); File.Move(temporary, target, false); publishDuration += publishWatch.Elapsed;
             outputs.Add(target);
         }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); if (Directory.Exists(renderDirectory)) try { Directory.Delete(renderDirectory, true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+        finally
+        {
+            try { if (File.Exists(temporary)) File.Delete(temporary); }
+            finally { renderWorkspace?.Dispose(); }
+        }
         var outputPath = outputs.Count == 1 ? outputs[0] : outputDirectory;
         var validationReport = validations.Aggregate(
             new ValidationReport(ValidationStatus.Pass, []),
