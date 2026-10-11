@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using Microsoft.Win32.SafeHandles;
 using Pdf2Hwp.Core;
 using UglyToad.PdfPig;
 
@@ -20,13 +22,15 @@ public sealed record JobRenderResult(JobRenderKey Key, string RenderPath, string
 public sealed class JobRenderCache(IPdfPageRenderer renderer, string jobDirectory)
 {
     private readonly ConcurrentDictionary<JobRenderKey, Lazy<Task<JobRenderResult>>> _renders = new();
+    private readonly ConcurrentDictionary<string, SourceHashSnapshot> _sourceHashes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _sourceHashGates = new(StringComparer.OrdinalIgnoreCase);
     private int _actualRenders, _reuseHits;
     public int ActualRenders => Volatile.Read(ref _actualRenders);
     public int RenderReuseHits => Volatile.Read(ref _reuseHits);
 
     public async Task<JobRenderResult> RenderAsync(DocumentPage page, int renderQuality, CancellationToken cancellationToken)
     {
-        var hash = await PdfiumPreviewThumbnailRenderer.SourceHashAsync(page.SourcePath, cancellationToken).ConfigureAwait(false);
+        var hash = await GetSourceHashAsync(page.SourcePath, cancellationToken).ConfigureAwait(false);
         var key = new JobRenderKey(hash, page.SourcePageIndex, renderQuality, page.RotationDegrees, page.Crop);
         var candidate = new Lazy<Task<JobRenderResult>>(() => RenderCoreAsync(page, key, cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication);
         var lazy = _renders.GetOrAdd(key, candidate);
@@ -34,6 +38,72 @@ public sealed class JobRenderCache(IPdfPageRenderer renderer, string jobDirector
         if (reused) Interlocked.Increment(ref _reuseHits);
         try { var result = await lazy.Value.ConfigureAwait(false); return result with { WasReused = reused }; }
         catch { _renders.TryRemove(new KeyValuePair<JobRenderKey, Lazy<Task<JobRenderResult>>>(key, lazy)); throw; }
+    }
+
+    private async Task<string> GetSourceHashAsync(string sourcePath, CancellationToken cancellationToken)
+    {
+        var path = Path.GetFullPath(sourcePath);
+        var gate = _sourceHashGates.GetOrAdd(path, static _ => new SemaphoreSlim(1, 1));
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var fingerprint = SourceFileFingerprint.Read(path);
+            if (fingerprint.CanReuseCachedHash && _sourceHashes.TryGetValue(path, out var cached) && cached.Fingerprint == fingerprint)
+                return cached.Hash;
+
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                fingerprint = SourceFileFingerprint.Read(path);
+                if (fingerprint.CanReuseCachedHash && _sourceHashes.TryGetValue(path, out cached) && cached.Fingerprint == fingerprint)
+                    return cached.Hash;
+
+                var hash = await PdfiumPreviewThumbnailRenderer.SourceHashAsync(path, cancellationToken).ConfigureAwait(false);
+                var afterHash = SourceFileFingerprint.Read(path);
+                if (fingerprint != afterHash)
+                    continue;
+
+                if (afterHash.CanReuseCachedHash)
+                    _sourceHashes[path] = new SourceHashSnapshot(afterHash, hash);
+                return hash;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+    }
+
+    private sealed record SourceHashSnapshot(SourceFileFingerprint Fingerprint, string Hash);
+
+    private readonly record struct SourceFileFingerprint(long Length, long LastWriteTimeUtcTicks, long ChangeTimeTicks, bool CanReuseCachedHash)
+    {
+        public static SourceFileFingerprint Read(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var length = stream.Length;
+            if (!OperatingSystem.IsWindows() || !GetFileInformationByHandleEx(stream.SafeFileHandle, 0, out var basicInfo, (uint)Marshal.SizeOf<FileBasicInfo>()) || basicInfo.ChangeTime == 0)
+            {
+                var lastWriteTimeUtc = File.GetLastWriteTimeUtc(path);
+                return new SourceFileFingerprint(length, lastWriteTimeUtc.Ticks, 0, false);
+            }
+
+            return new SourceFileFingerprint(length, basicInfo.LastWriteTime, basicInfo.ChangeTime, true);
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "GetFileInformationByHandleEx")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetFileInformationByHandleEx(SafeFileHandle file, int fileInformationClass, out FileBasicInfo fileInformation, uint bufferSize);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct FileBasicInfo
+        {
+            public long CreationTime;
+            public long LastAccessTime;
+            public long LastWriteTime;
+            public long ChangeTime;
+            public uint FileAttributes;
+        }
     }
 
     private async Task<JobRenderResult> RenderCoreAsync(DocumentPage page, JobRenderKey key, CancellationToken token)
