@@ -6,7 +6,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>PDF2HWP</AssemblyName>
     <Product>PDF2HWP</Product>
-    <Description>PDF to HWPX/HWP high-fidelity converter</Description>
+    <Description>PDF to HWPX visual-fidelity converter</Description>
     <Company>PDF2HWP Project</Company>
     <Authors>PDF2HWP Project</Authors>
     <Copyright>Copyright © PDF2HWP Project</Copyright>

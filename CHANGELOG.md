@@ -21,4 +21,5 @@ Record verified, release-relevant product or operator changes here. No release e
 
 ### Changed
 
+- Describe the desktop output as HWPX-only in the app subtitle and package metadata while HWP binary export remains unsupported.
 - Verify the PDFium release provenance and bundled license notices; include the original dependency/runtime notice bundle beside the single-file EXE and add a reproducible audit gate.
