@@ -11,6 +11,40 @@ $expectedArchiveHash = '88276459349B291C41F10422DAD0210F007C04D919C8FA56472B6B7C
 function Assert-Equal([string]$actual, [string]$expected, [string]$label) {
     if ($actual -ine $expected) { throw "$label mismatch. Expected '$expected', got '$actual'." }
 }
+function Get-RawSha256([string]$path) {
+    (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+}
+function Get-RawSha256FromBytes([byte[]]$bytes) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { [Convert]::ToHexString($sha.ComputeHash($bytes)) } finally { $sha.Dispose() }
+}
+function Get-CanonicalTextSha256FromText([string]$text) {
+    $normalized = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    Get-RawSha256FromBytes ($utf8.GetBytes($normalized))
+}
+function Get-CanonicalTextSha256([string]$path) {
+    $utf8 = [System.Text.UTF8Encoding]::new($false, $true)
+    $text = $utf8.GetString([System.IO.File]::ReadAllBytes($path))
+    Get-CanonicalTextSha256FromText $text
+}
+function Assert-TextAssetEqual([string]$sourcePath, [string]$targetPath, [string]$label) {
+    $sourceRaw = Get-RawSha256 $sourcePath
+    $targetRaw = Get-RawSha256 $targetPath
+    if ($sourceRaw -ieq $targetRaw) {
+        Write-Output "TEXT_CONTENT_VERIFIED: $label (raw SHA-256 exact match: $sourceRaw)"
+        return
+    }
+    $sourceCanonical = Get-CanonicalTextSha256 $sourcePath
+    $targetCanonical = Get-CanonicalTextSha256 $targetPath
+    if ($sourceCanonical -ine $targetCanonical) {
+        throw "$label text content mismatch. Source canonical SHA-256 '$sourceCanonical', target canonical SHA-256 '$targetCanonical'; source raw SHA-256 '$sourceRaw', target raw SHA-256 '$targetRaw'."
+    }
+    Write-Output "TEXT_CONTENT_VERIFIED: $label (canonical SHA-256: $sourceCanonical)"
+    if ($sourceRaw -ine $targetRaw) {
+        Write-Output "RAW_EOL_DIFFERENCE: $label (source raw SHA-256: $sourceRaw; target raw SHA-256: $targetRaw)"
+    }
+}
 function Get-ZipEntryHash([string]$archivePath, [string]$entryName) {
     $zip = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
     try {
@@ -21,6 +55,21 @@ function Get-ZipEntryHash([string]$archivePath, [string]$entryName) {
         try { [Convert]::ToHexString($sha.ComputeHash($stream)) } finally { $stream.Dispose(); $sha.Dispose() }
     } finally { $zip.Dispose() }
 }
+
+# Exercise the narrow text normalization and byte-exact binary hash rules before auditing assets.
+$crlfSample = "A`r`nB`r`n"
+$lfSample = "A`nB`n"
+$changedSample = "A`nC`n"
+Assert-Equal (Get-CanonicalTextSha256FromText $crlfSample) (Get-CanonicalTextSha256FromText $lfSample) 'Canonical text EOL self-test'
+if ((Get-CanonicalTextSha256FromText $crlfSample) -ieq (Get-CanonicalTextSha256FromText $changedSample)) {
+    throw 'Canonical text content-change self-test unexpectedly matched.'
+}
+$binarySample = [byte[]]@(0x41, 0x42)
+$binarySampleChanged = [byte[]]@(0x41, 0x43)
+if ((Get-RawSha256FromBytes $binarySample) -ieq (Get-RawSha256FromBytes $binarySampleChanged)) {
+    throw 'Binary byte-change self-test unexpectedly matched.'
+}
+Write-Output 'LICENSE_TEXT_NORMALIZATION_SELF_TESTS_PASS'
 
 New-Item -ItemType Directory -Force -Path $audit | Out-Null
 $downloads = @(
@@ -87,15 +136,15 @@ $projectDll = Join-Path $root 'src\Pdf2Hwp.App\bin\Release\net8.0-windows\win-x6
 foreach ($required in @($archive,$attestationPath,$nupkg,$releaseDll,$projectDll)) {
     if (-not (Test-Path $required -PathType Leaf)) { throw "Required local audit/build file is missing: $required" }
 }
-Assert-Equal (Get-FileHash $archive -Algorithm SHA256).Hash $expectedArchiveHash 'Official PDFium release archive SHA-256'
+Assert-Equal (Get-RawSha256 $archive) $expectedArchiveHash 'Official PDFium release archive SHA-256'
 $payload = (Get-Content $attestationPath -Raw | ConvertFrom-Json).dsseEnvelope.payload
 $statement = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json
 $subject = $statement.subject | Where-Object name -eq 'pdfium-win-x64.tgz' | Select-Object -First 1
 if ($null -eq $subject) { throw 'The attestation does not name pdfium-win-x64.tgz.' }
 Assert-Equal $subject.digest.sha256 $expectedArchiveHash 'Attested PDFium release archive digest'
 Assert-Equal (Get-ZipEntryHash $nupkg 'runtimes/win-x64/native/pdfium.dll') $expectedDllHash 'NuGet package PDFium DLL SHA-256'
-Assert-Equal (Get-FileHash $releaseDll -Algorithm SHA256).Hash $expectedDllHash 'Official release archive PDFium DLL SHA-256'
-Assert-Equal (Get-FileHash $projectDll -Algorithm SHA256).Hash $expectedDllHash 'Project Release PDFium DLL SHA-256'
+Assert-Equal (Get-RawSha256 $releaseDll) $expectedDllHash 'Official release archive PDFium DLL SHA-256'
+Assert-Equal (Get-RawSha256 $projectDll) $expectedDllHash 'Project Release PDFium DLL SHA-256'
 Assert-Equal (Get-Content (Join-Path $audit 'release\VERSION') -Raw).Trim() "MAJOR=152`nMINOR=0`nBUILD=7961`nPATCH=0" 'Official archive PDFium version'
 
 $pdfiumLicenseSource = Join-Path $audit 'release\licenses'
@@ -106,7 +155,7 @@ foreach ($name in $archiveLicenseNames) {
     $source = Join-Path $pdfiumLicenseSource $name
     $target = Join-Path $pdfiumLicenseTarget $name
     if (-not (Test-Path $target -PathType Leaf)) { throw "PDFium original notice was not preserved: $name" }
-    Assert-Equal (Get-FileHash $source -Algorithm SHA256).Hash (Get-FileHash $target -Algorithm SHA256).Hash "Preserved PDFium original '$name'"
+    Assert-TextAssetEqual $source $target "Preserved PDFium original '$name'"
 }
 
 $nupkgPaths = @(
@@ -130,12 +179,12 @@ $licensesSource = Join-Path $root 'licenses\third-party'
 $noticeOutput = Join-Path $publish 'THIRD_PARTY_NOTICES.md'
 $licensesOutput = Join-Path $publish 'licenses\third-party'
 if (-not (Test-Path $noticeOutput -PathType Leaf)) { throw 'Published package does not contain THIRD_PARTY_NOTICES.md.' }
-Assert-Equal (Get-FileHash $noticeSource -Algorithm SHA256).Hash (Get-FileHash $noticeOutput -Algorithm SHA256).Hash 'Published THIRD_PARTY_NOTICES.md'
+Assert-TextAssetEqual $noticeSource $noticeOutput 'Published THIRD_PARTY_NOTICES.md'
 foreach ($sourceFile in Get-ChildItem $licensesSource -Recurse -File) {
     $relative = $sourceFile.FullName.Substring($licensesSource.Length).TrimStart('\')
     $publishedFile = Join-Path $licensesOutput $relative
     if (-not (Test-Path $publishedFile -PathType Leaf)) { throw "Published package is missing original license/notice: $relative" }
-    Assert-Equal (Get-FileHash $sourceFile.FullName -Algorithm SHA256).Hash (Get-FileHash $publishedFile -Algorithm SHA256).Hash "Published original license/notice '$relative'"
+    Assert-TextAssetEqual $sourceFile.FullName $publishedFile "Published original license/notice '$relative'"
 }
 
 $gh = Get-Command gh -ErrorAction SilentlyContinue
