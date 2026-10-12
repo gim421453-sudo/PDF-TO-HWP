@@ -7,12 +7,12 @@ Status: PUSH_READY / READY_WITH_WARNINGS
 
 - 저장소: PDF2HWP (노트북 PDF-TO-HWP), Codex 담당. Windows x64 WPF / .NET 8, PDF2HWP.sln.
 - 현재 지원 출력은 HWPX Visual Fidelity다. HWP 바이너리 출력, OCR, Editable 재구성, Safe Hybrid, PDF 대 결과물 비교는 미구현이다.
-- 이번 작업 시작 시 브랜치는 main, HEAD는 95e0c1505d4a483d96e3b8acbebd7e71a7952d4a, origin/main은 cd09492a0c50d46c8d3e727bad6f8cb050bc8491이었다. main은 origin/main보다 11개 커밋 앞서 있었고, push는 하지 않았다.
+- 현재 브랜치는 main이다. 작업 시작 HEAD는 95e0c1505d4a483d96e3b8acbebd7e71a7952d4a였고, blocker 수정 commit은 `fee8e0a16a3011702422819e3400449840ebdaf7`이다. origin/main은 cd09492a0c50d46c8d3e727bad6f8cb050bc8491이며, push는 하지 않았다.
 
 ## 라이선스 검증 blocker 수정 (2026-10-12)
 
 - 목표: 라이선스 텍스트의 줄바꿈만 canonical 비교로 허용하고, 바이너리 및 provenance 해시 검증을 그대로 유지한다.
-- 수정 파일은 `eng/verify-license-assets.ps1`이다. `Get-RawSha256`와 `Get-CanonicalTextSha256`를 분리했다. canonical 경로는 엄격한 UTF-8로 읽고 CRLF와 CR만 LF로 바꾼 뒤 BOM 없는 UTF-8 바이트로 SHA-256을 계산한다. 공백, 탭, 빈 줄, 문장, 대소문자, Unicode 문자는 정규화하지 않는다. 원시 SHA가 같으면 더 강한 byte-exact 일치로 통과해 비 UTF-8 고지 파일을 변환하지 않는다.
+- 검증 로직 변경 파일은 `eng/verify-license-assets.ps1`이다. `Get-RawSha256`와 `Get-CanonicalTextSha256`를 분리했다. canonical 경로는 엄격한 UTF-8로 읽고 CRLF와 CR만 LF로 바꾼 뒤 BOM 없는 UTF-8 바이트로 SHA-256을 계산한다. 공백, 탭, 빈 줄, 문장, 대소문자, Unicode 문자는 정규화하지 않는다. 원시 SHA가 같으면 더 강한 byte-exact 일치로 통과해 비 UTF-8 고지 파일을 변환하지 않는다.
 - PDFium 공식 archive, attestation digest, nupkg 내부 PDFium DLL, release/project PDFium DLL은 계속 raw byte SHA-256 exact 검증이다. GitHub attestation 서명 검증과 NuGet 서명 검증도 유지했다.
 - 자체 회귀 검사 `LICENSE_TEXT_NORMALIZATION_SELF_TESTS_PASS`: `A\r\nB\r\n` 대 `A\nB\n` canonical 일치, `B` 대 `C` 내용 변경 canonical 불일치, 바이너리 1바이트 변경 raw hash 불일치를 확인했다.
 - 공식 PDFium archive의 추출 `abseil.txt` raw SHA-256은 `F54FFF0B905DF5B3464527C652A30E903B172D6DCAB4D89B5E6F105D5E4A4603`, 저장소 보존본 raw SHA-256은 `C79A7FEA0E3CAC04CD43F20E7B648E5A0FF8FA5344E644B0EE09CA1162B62747`이다. 양쪽 canonical SHA-256은 `C79A7FEA0E3CAC04CD43F20E7B648E5A0FF8FA5344E644B0EE09CA1162B62747`로 같다. 공식본은 CRLF 203개, 보존본은 LF 203개다. 다른 PDFium 텍스트 자산의 EOL 차이도 canonical 비교에서 통과했고, 내용 차이는 없다.
@@ -21,12 +21,12 @@ Status: PUSH_READY / READY_WITH_WARNINGS
 - `eng/publish-win-x64.ps1` PASS (`RuntimeFrameworkVersion=8.0.27`), 산출물 `artifacts/win-x64-singlefile/PDF2HWP.exe`, 187,718,118 bytes. publish 구성을 바꾸지 않았으므로 직전 WPF GUI 스모크 PASS(창 표시, 제목 `PDF2HWP`, 정상 종료)를 재사용했다.
 - 보호 샘플 #23 SHA-256 `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`, Golden SHA-256 `CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D`; 모두 추적 상태이며 변함없다. 한컴 수동 검증은 하지 않았고 `HANCOM_3PAGE_MANUAL_REQUIRED`를 유지한다.
 - AGENTS.md의 이전 push 검증 상태 diff는 일회성 기록이므로 해당 hunk만 기존 내용으로 되돌렸다. 현재 AGENTS.md diff는 없다. 보호 라이선스 원문, 기능 코드, 의존성은 수정하지 않았다.
-- `git diff --check` PASS. 현재 판정은 `PUSH_READY`; push하지 않았다. 검증 통과 후 로컬 commit을 진행한다.
+- `git diff --check` PASS. 현재 판정은 `PUSH_READY`; 로컬 blocker 수정 commit `fee8e0a16a3011702422819e3400449840ebdaf7`을 만들었고 push하지 않았다.
 
 ### 다음 단계
 
-1. 이번 라이선스 검증 수정과 핸드오프를 로컬 main에 commit한다. Git push는 하지 않았다.
-2. 한컴 수동 검증은 별도 작업에서 샘플 #23을 열기만 하고 저장하지 않는다. 결과 확인 전까지 `HANCOM_3PAGE_MANUAL_REQUIRED`를 유지한다.
+1. 한컴 수동 검증은 별도 작업에서 샘플 #23을 열기만 하고 저장하지 않는다. 결과 확인 전까지 `HANCOM_3PAGE_MANUAL_REQUIRED`를 유지한다.
+2. push는 사용자 요청 후 진행한다.
 
 ## 목표 및 완료 작업
 
@@ -109,5 +109,5 @@ Status: PUSH_READY / READY_WITH_WARNINGS
 
 - Windows x64, .NET SDK 10.0.401로 최종 Restore/Release Build/Test를 검증했다. 저장소의 기본 앱 대상은 .NET 8이다.
 - PowerShell 7.6.5에서 `eng/verify.ps1`을 실행했다. 샌드박스 안에서는 testhost 연결 시간 초과가 났고 샌드박스 밖 실행에서 통과했다.
-- 작업 시작 시 로컬 main은 origin/main보다 11개 커밋 앞섰다. origin/main은 cd09492이며 push 검증 상태는 PUSH_READY다. 한컴 수동 검증이 남아 있어 교차 기기 상태는 READY_WITH_WARNINGS다.
+- 로컬 main에 blocker 수정 commit `fee8e0a16a3011702422819e3400449840ebdaf7`이 포함됐다. origin/main은 cd09492이며 push하지 않았다. push 검증 상태는 PUSH_READY다. 한컴 수동 검증이 남아 있어 교차 기기 상태는 READY_WITH_WARNINGS다.
 - 비밀값이나 .env 내용은 기록하지 않았다.
