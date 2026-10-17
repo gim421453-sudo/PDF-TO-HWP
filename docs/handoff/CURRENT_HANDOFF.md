@@ -1,7 +1,65 @@
 # Current Project Handoff
 
-Last updated: 2026-10-12 (Asia/Seoul)
-Status: PUSH_READY / READY_WITH_WARNINGS
+Last updated: 2026-10-17 (Asia/Seoul)
+Status: DOCS_READY_TO_COMMIT / HANCOM_3PAGE_MANUAL_REQUIRED / READY_WITH_WARNINGS
+
+## 최신 세션 — 진단 문서 정리 (2026-10-17)
+
+- 목표/완료: AGENTS.md의 영구 운영 규칙 정리를 그대로 유지하고, 이 문서의 빈 중복 제목과 최신 재개 순서에 충돌하는 문구만 정리했다. 과거 진단 데이터와 절차 기록은 보존했다. 이번에 편집한 파일은 이 핸드오프뿐이다. Hancom GUI 측정과 빌드/테스트는 NOT RUN이다.
+- 브랜치 main, HEAD 29d8640837d13fcb57f858aa8fd8c256d9f4478a. 향후 문서 커밋 후보는 AGENTS.md와 docs/handoff/CURRENT_HANDOFF.md 두 파일뿐이다. git add/commit/push는 하지 않았다. git diff --check PASS. AGENTS.md, 보호 샘플 #23, Golden 및 diagnostic/ 전체 파일은 편집 전후 SHA-256이 같다.
+- manual-test 주의: artifacts/compatibility-tests/diagnostic/manual-test/23D-low-resolution-background-manual.hwpx는 사용자 제공 이력상 이전 Computer Use 저장 테스트에서 의도치 않은 한글 한 글자가 입력됐을 가능성이 있다. 원본 diagnostic 23D와 byte-identical이 아니다. 호환성/성능 및 정상 저장/재열기 PASS의 근거로 사용하지 않는다. forensic/reference 목적으로 로컬 보존하며 추가 수정·삭제하지 않는다.
+- diagnostic/ 정책: HWPX 샘플, extracted/lowres PNG, manual-test를 포함한 artifacts/compatibility-tests/diagnostic/ 전체는 기존 미추적/로컬 상태로 유지하고 이번 문서 커밋에서 제외한다. .gitignore는 변경하지 않았다. 성능 진단 완료 후 보존/삭제/fixture 편입 여부를 결정한다.
+- 다음 정확한 작업: Windows 앱 제어가 가능한 Computer Use와 한글 2024를 준비한 뒤, 동일 Hancom 세션에서 23E highres 1P → 23F highres 2P → 23G highres 3P → 23H lowres 1P → 23I lowres 2P → 23J lowres 3P 순서로 각 파일의 first/warm open을 비교한다. 문서는 저장하지 않는다. 이전 Computer Use 차단 이력과 원인 미확정 상태는 아래 진단 기록을 참조한다. HANCOM_3PAGE_MANUAL_REQUIRED를 유지하며 FULL_COMPATIBILITY를 선언하지 않는다.
+- 교차 기기 준비도 READY_WITH_WARNINGS: 두 문서는 추적 중이지만 현재 수정분은 미커밋이며 진단 파일은 미추적이다. 다른 기기 동기화는 확인되지 않았다.
+
+## 이전 세션 — Hancom 렉 3차 성능 비교 (2026-10-15)
+
+- 목표: 한글 2024를 유지한 동일 세션에서 23E→23F→23G→23H→23I→23J를 각각 first/warm 두 번 열어 페이지 수 및 해상도 영향을 비교한다.
+- 결과: HANCOM_COMPUTER_USE_BLOCKED. 현재 Computer Use의 cua.getState()는 apps=[]와 브라우저 두 개만 반환했다. getApp/listApps/listWindows는 모두 undefined였다. 요청의 중단 조건에 따라 Windows 앱 제어를 우회하지 않고 측정을 중단했다. Hancom을 실행하거나 문서를 열지 않았으므로 이번 세션의 여섯 파일 first/warm 및 페이지 이동·스크롤·경고·배경·잘림·CPU·Memory·Disk 결과는 전부 NOT RUN이다. Hancom의 FREEZE 또는 손상으로 판정한 것이 아니다.
+- 기존 참고값(정밀 측정 아님): 04 first 약 25초 / warm 약 12초, 15 약 20초, 21 약 30초, 23E 약 20초, 23F 약 22초. 이번 동일 세션 측정으로 재검증하지 않았고 현재 결과와 섞어 사용하지 않는다.
+- 진단 파일 23E/23F/23G/23H/23I/23J 모두 존재한다. SHA-256 비교로 23G==23A, 23J==23D를 확인했다. 새 샘플 또는 semantic을 만들지 않았다.
+- 원인 판정: section scaling, image resolution, page-background semantic, body text는 UNKNOWN. Hancom initialization/cache는 기존 04 first/warm 차이로 조사 후보이나 HIGH/MEDIUM/LOW를 확정할 자료가 부족하다. PERFORMANCE_CAUSE_STILL_UNCLEAR. 측정 없이 production writer 변경 방향을 정하지 않는다.
+- 문서 정리: AGENTS.md의 날짜별 현재 저장소 상태 블록을 제거하고 상태/측정은 이 핸드오프에만 기록하도록 영구 운영 규칙을 정리했다. 기존 담당표·보호 경로·승계 정책을 보존했고 수동 검증 전 FULL_COMPATIBILITY 선언 금지 규칙은 유지했다. 이전 상태 내용은 아래 역사 기록에 보존되어 있다.
+- 시작/종료 브랜치 main, HEAD 29d8640837d13fcb57f858aa8fd8c256d9f4478a. 코드·의존성·설정·샘플 변경 없음. 문서 변경은 AGENTS.md와 이 핸드오프뿐이며 artifacts/compatibility-tests/diagnostic/는 기존 미추적 상태다. commit/push 또는 브랜치 전환은 하지 않았다. 빌드/테스트 NOT RUN(성능 측정 작업이며 기능 변경 없음).
+- 보호 샘플 #23 SHA-256 전/후: CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED. Golden SHA-256 전/후: CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D. 둘 다 기존 기대값 일치. git diff --check PASS.
+- HANCOM_3PAGE_MANUAL_REQUIRED 유지. FULL_COMPATIBILITY 선언하지 않음.
+- 다음 정확한 작업: Windows 앱 제어를 실제 제공하는 Computer Use 세션에서 한글 2024를 먼저 준비하고 다른 문서를 정상 닫은 뒤, 동일 프로세스에서 23E/F/G/H/I/J 각각 first/warm를 측정한다. 문서 저장 없이 정상 닫고 전체 여섯 파일을 같은 조건으로 다시 측정한다. 완료 후 보호 해시와 Git 상태를 확인하고 이 핸드오프만 갱신한다.
+- 교차 기기 준비도 READY_WITH_WARNINGS: AGENTS.md와 핸드오프는 추적 중이지만 수정분을 commit/push하지 않았고 진단 파일은 미추적이므로 다른 기기 동기화는 미확인이다.
+
+## 이전 세션 — Hancom Visual Fidelity 2차 성능 분리 (2026-10-15)
+
+- 목표: 문서 페이지 수와 배경 이미지 해상도에 따른 Hancom Office 2024 표시 지연을 비교한다. 현재 측정은 GUI에서 눈으로 확인한 대략값이며 정밀 벤치마크가 아니다.
+- 앞서 완료한 기준 샘플 측정: 04 첫 열기 약 25초, 15 약 20초, 21 약 30초. 앱을 띄워 둔 뒤 04 재열기는 약 12초였다. 당시 손상/복구 경고는 없고 UI는 응답했다. 21은 130% 확대에서 화면 오른쪽이 잘려 보여 문서 손상으로 판정하지 않았다. 이 샘플들의 과거 Hancom PASS 기록은 발견되지 않았다.
+- 고해상도 확장 측정: 23E(1페이지)는 약 20초 대기 중 첫 페이지가 표시됐다. 23F(2페이지)는 약 22초 대기 중 첫 페이지가 표시됐고, 2페이지 이동은 약 2.5초였다. 상태 표시줄은 각각 1/1, 1/2였으며 경고 없이 UI가 응답했다. CPU/메모리는 측정하지 않았다. 수치는 표시 확인 시점 기준의 대략값이다.
+- 미완료: 고해상도 3페이지 23G와 저해상도 1·2·3페이지 23H/23I/23J의 GUI 비교. 23G는 23A와, 23J는 23D와 각각 바이트 동일한 진단본이므로 해당 짝은 한 파일만 열어도 같은 패키지다. 이번 재시도에서 `cua.getState()`가 앱 목록을 비우고 브라우저만 반환했으며 현재 Computer Use 런타임은 브라우저 API만 제공했다. `cua.listApps`도 사용할 수 없어 Windows Hancom 창에 접근할 수 없었다. 이는 Hancom 열기 실패나 응답 없음 판정이 아니라 제어 기능 미노출이다.
+- 이번 재시도 중 문서 저장, Hancom 설정 변경, 프로세스 강제 종료, 코드/의존성/설정 변경은 없었다. 실제 GUI 비교는 미완료이며 원인 가설을 확정하지 않는다.
+- 보호 원본 #23 SHA-256은 `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`, Golden은 `CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D`로 현재 확인값이 기대값과 일치한다. `23G`/`23A`, `23J`/`23D`의 SHA-256도 각각 동일하다.
+- 브랜치 `main`, HEAD `29d8640837d13fcb57f858aa8fd8c256d9f4478a`. 현재 변경 표시는 `AGENTS.md`, `docs/handoff/CURRENT_HANDOFF.md`, 미추적 `artifacts/compatibility-tests/diagnostic/`이다. 코드 변경, 커밋, 푸시는 없다. 진단 파일이 미추적이므로 교차 기기 동기화는 미확인 (`READY_WITH_WARNINGS`).
+- 상태: `HANCOM_3PAGE_MANUAL_REQUIRED` 유지. `FULL_COMPATIBILITY` 선언 금지.
+- 다음 단계: Computer Use가 Windows 네이티브 앱을 노출하는 세션에서 Hancom을 준비하고, 23G(또는 바이트 동일 23A) 뒤 23H, 23I, 23J(23D와 동일)를 열어 페이지 이동/스크롤/경고/첫 표시를 기록한다. 각 문서는 저장하지 않고 정상 종료한다. 이후 H1~H4 가설을 비교하고 보호 샘플 #23과 Golden 해시를 재확인한다.
+
+## 이전 세션 — Hancom sample #23 렉 원인 격리 (2026-10-12)
+
+- 목표: 보호 샘플 #23과 Golden을 보존하면서 한컴 지연 원인 확인용 비교 샘플을 만든다. 브랜치 `main`, 시작/종료 HEAD `29d8640837d13fcb57f858aa8fd8c256d9f4478a`. 코드, 의존성, 설정은 변경하지 않았고 커밋/푸시는 하지 않았다.
+- 원본 #23은 읽기 전용으로 검사했다. 세 section 모두 A4 세로 `59528×84189` HWPUNIT, section별 `hp:p=1`, `hp:run=2`, `hp:t=1`, `hp:pic=0`이다. 본문 텍스트는 각각 `PAGE 1 / P1 TL / P1 TR / P1 CENTER / P1 BL / P1 BR` 대응 문자열이며 세 배경 PNG는 모두 `1653×2338`, 총 압축 전 이미지 119,426바이트다.
+- `artifacts/compatibility-tests/diagnostic/23A-background-only.hwpx`: 기존 `HwpxImagePackageWriter.WritePageBackgroundsAsync` 경로에서 생성한 검증된 최소 section XML만 원본 패키지의 section0~2에 적용했다. 본문 텍스트/lineseg를 제거했으며 원본 패키지의 다른 항목의 압축 해제 내용, `pagePr`, header, manifest, 배경 PNG와 background refs는 보존했다. 원본과 내부 ZIP 항목 내용 비교 시 달라진 항목은 section0~2 XML뿐이다. ZIP 압축 스트림은 재생성됐다.
+- `artifacts/compatibility-tests/diagnostic/23B-current-clone.hwpx`: 원본을 다른 이름으로 복제한 byte-identical 대조군이다. 현재 background writer는 본문 텍스트를 제거하므로 원본 텍스트와 배경을 함께 재생성할 검증 경로가 없어, 보존 우선으로 정확 복제했다.
+- `23C-single-section-3pages.hwpx`는 만들지 않았다. 현재 writer는 입력 페이지마다 section을 만들고 단일 section 내 서로 다른 세 logical page 배경을 만드는 검증된 semantic/API가 없다. body-anchored full-page picture의 기존 rejected path는 사용하지 않았다. 판정: `NOT_SAFE_TO_GENERATE`.
+- `artifacts/compatibility-tests/diagnostic/23D-low-resolution-background.hwpx`: 23A와 같은 section XML/기타 패키지 구조를 유지하고 배경 PNG 3개만 `636×900`으로 교체했다. 23A와 압축 해제 ZIP 항목 내용 비교 시 달라진 항목은 BinData/image0~2.png뿐이며 pagePr는 같다.
+- 자동 검증: 원본, 23A, 23B, 23D 전부 ZIP 전체 entry 읽기, XML parse, content.hpf manifest/spine refs, section 및 pagePr, background imgBrush/ref/BinData 존재, no body `hp:pic`, internal `HwpxPackageInspector` 2회 재검사에서 PASS. 실제 Hancom 열기/재열기는 하지 않았다.
+
+| 대상 | Sections/논리 페이지 | 본문 hp:t | hp:pic | 배경 | PNG 해상도 | HWPX 크기 | 압축 전 이미지 바이트 | 내부 검사 |
+|---|---:|---:|---:|---:|---|---:|---:|---|
+| 원본 #23 | 3/3 | 3 | 0 | 3 | 1653×2338 | 62,956 | 119,426 | PASS |
+| 23A | 3/3 | 0 | 0 | 3 | 1653×2338 | 66,409 | 119,426 | PASS |
+| 23B | 3/3 | 3 | 0 | 3 | 1653×2338 | 62,956 | 119,426 | PASS |
+| 23C | 생성 안 함 | — | — | — | — | — | — | `NOT_SAFE_TO_GENERATE` |
+| 23D | 3/3 | 0 | 0 | 3 | 636×900 | 30,469 | 37,245 | PASS |
+
+- 보호 원본 #23 SHA-256은 작업 전후 `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`, Golden은 `CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D`로 기존 값과 같다. `HANCOM_3PAGE_MANUAL_REQUIRED` 유지. `FULL_COMPATIBILITY` 선언 금지.
+- 원인 가설은 Hancom 수동 비교 전까지 미확정이다. 첫 확인 후보는 H3(이미지 디코딩)다. 원본 세 장은 약 11.59M 픽셀, 23D는 약 1.72M 픽셀로 약 85% 감소한다. 23A와 23D는 PNG만 달라 H3를 비교한다. 23A와 원본/23B의 차이는 section XML뿐이며 본문 테스트 텍스트, lineseg, run 구조가 함께 제거되므로 23A가 빨라도 H1(본문/layout)과 section XML 차이를 완전히 분리하지는 못한다. 세 샘플이 모두 비슷하게 느리면 3-section/background 구조(H2) 또는 Hancom 반응(H4)을 더 조사한다. 내부 검사 PASS는 한컴 호환성/성능 PASS를 의미하지 않는다.
+- 다음 단계: Hancom에서 `23D-low-resolution-background.hwpx` → `23A-background-only.hwpx` → `23B-current-clone.hwpx` → 보호 원본 #23 순으로 열어 체감 등급(`FAST`, `SLIGHT_DELAY`, `SLOW`, `VERY_SLOW`, `FREEZE`), 첫 페이지 표시/스크롤/페이지 이동/저장/종료/재열기, 손상 경고, 페이지 수/배경 유지, CPU 지속 여부를 기록한다. 샘플을 저장하지 않는다. C는 생성되지 않아 열지 않는다. 결과에 따라 H1~H4를 좁히고 그 전까지 게이트를 유지한다.
+- `git status`: `docs/handoff/CURRENT_HANDOFF.md` 수정, `artifacts/compatibility-tests/diagnostic/` 미추적. 소스와 AGENTS.md 변경은 없다. 산출물과 핸드오프는 커밋하지 않아 교차 기기 동기화는 확인되지 않았다 (`READY_WITH_WARNINGS`).
 
 ## Project
 
@@ -25,8 +83,8 @@ Status: PUSH_READY / READY_WITH_WARNINGS
 
 ### 다음 단계
 
-1. 한컴 수동 검증은 별도 작업에서 샘플 #23을 열기만 하고 저장하지 않는다. 결과 확인 전까지 `HANCOM_3PAGE_MANUAL_REQUIRED`를 유지한다.
-2. push는 사용자 요청 후 진행한다.
+1. 현재 재개 절차는 최신 세션 섹션을 따른다: 동일 Hancom 세션에서 23E → 23F → 23G → 23H → 23I → 23J 순서로 각 파일의 first/warm open을 비교한다. 23D → 23A → 23B → 원본 #23 순서는 위의 과거 진단 계획 기록이며 최신 재개 순서가 아니다. 각 샘플을 저장하지 않으며 `HANCOM_3PAGE_MANUAL_REQUIRED`를 유지한다.
+2. 진단 결과로 원인이 좁혀진 뒤 별도 작업에서 수정 방향을 결정한다. push는 사용자 요청 후 진행한다.
 
 ## 목표 및 완료 작업
 
@@ -98,7 +156,7 @@ Status: PUSH_READY / READY_WITH_WARNINGS
 - HWPX inspector의 모든 섹션별 배경 리소스 연결을 깊게 확인하는 범위, UI의 회전/크롭 조작 노출, 추적 진단 파일 run.err/run.out/section18.xml 정리는 이 작업에 포함되지 않았다.
 - `HANCOM_3PAGE_MANUAL_REQUIRED`가 남아 있다. 실제 한컴 확인 전까지 `FULL_COMPATIBILITY`를 선언하지 않는다. 라이선스 감사는 현재 통과했고 보호 파일은 변경하지 않았다.
 
-## 다음 단계
+## 통합·라이선스 작업 당시 다음 단계 (과거 기록)
 
 1. 이번 라이선스 검증 수정과 핸드오프를 로컬 main에 commit한다. Git push는 하지 않았다.
 2. Computer Use helper 복구 후 샘플 #23을 읽기 전용으로 열고 저장하지 않는다. 열기 전·후 SHA-256을 비교하고 실제 페이지 렌더를 기록한다. 실패하면 HANCOM_3PAGE_MANUAL_REQUIRED를 유지한다.

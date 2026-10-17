@@ -15,7 +15,8 @@ OWNER: Codex
 - HOLD 프로젝트는 사용자가 풀기 전까지 아무도 수정하지 않는다.
 - 작업 시작 전 AGENTS.md, 핸드오프, git status, 현재 브랜치를 읽는다. 작은 단위로 수정 → 확인 → 커밋. 큰 변경 전에는 git-rollback.cmd mark <name>. 백업 파일(.bak)은 만들지 않는다.
 - 삭제, 강제 푸시, 히스토리 수정, 데이터 삭제는 먼저 묻는다. API 키/비밀번호/토큰은 코드에 넣지 않고 .env로 분리한다.
-- 작업이 끝나면 핸드오프와 AGENTS.md를 함께 갱신한다. 실행/테스트하지 않은 것은 "동작한다"고 쓰지 않는다.
+- 작업이 끝나면 핸드오프를 갱신한다. AGENTS.md에는 영구 운영 규칙만 기록하고 일회성 상태·진단 결과는 docs/handoff/CURRENT_HANDOFF.md에만 기록한다. 실행/테스트하지 않은 것은 "동작한다"고 쓰지 않는다.
+- Hancom 수동 검증을 마치기 전 FULL_COMPATIBILITY를 선언하지 않는다.
 
 ## 연동 규칙 (지금은 구현하지 않음)
 - 모든 프로젝트는 다른 프로젝트 없이 단독으로 빌드, 실행, 테스트가 통과해야 한다. 연동 코드는 지금 만들지 않는다.
@@ -24,17 +25,6 @@ OWNER: Codex
 - 상대 프로젝트의 담당이 다른 AI여도 저장소는 읽기만 하고, 필요한 변경은 docs/integration.md에 요청으로 남긴다. 상대 저장소를 직접 수정하지 않는다.
 - 연동 때문에 현재 프로젝트의 구조를 크게 바꾸지 않는다.
 
-## 현재 저장소 상태 (2026-10-12)
-- 저장소 PDF2HWP의 현재 브랜치는 main이다. 다섯 후속 브랜치 커밋은 모두 독립 분기 기준 cd09492에서 시작해 일반 병합으로 통합됐다. 작업 브랜치 커밋은 P2-5 ba06748, P2-6 d3ed42e, 임시 작업공간 c8f10b3, 출력 문구 e39474a, Hancom 게이트 9270ca3이며, 마지막 코드 병합 커밋은 6c701c7이다.
-- P2-5는 파일 길이·마지막 쓰기 시각·Windows 파일 시스템 변경 시각을 SHA 캐시 지문으로 사용한다. 신뢰할 변경 시각을 읽지 못하면 해시 캐시를 사용하지 않는다. 동일 경로·길이·마지막 쓰기 시각에서 PDF 내용만 바꾸는 회귀 테스트 PASS.
-- P2-6은 CompatibilityOutputReservation으로 비어 있는 출력 디렉터리 예약 표식을 원자적으로 획득한다. 같은 경로를 동시에 요청하면 한 실행만 획득하고 다른 실행은 안전 실패한다. 기존 파일을 덮어쓰지 않으며 패배한 실행은 산출물을 만들지 않는다. 생성기 자체는 실행하지 않았다.
-- P3 임시 작업공간은 실제 ConversionWorkspaceFactory를 사용해 정상 완료·취소·렌더 실패·검증 실패·게시 실패 때 작업 디렉터리와 active 표식 정리를 확인했다. 다음 작업 재실행과 다른 작업 디렉터리 보존도 검사했다.
-- 출력 UI 및 패키지 설명은 HWPX Visual Fidelity만 표시한다. HWP 바이너리 출력은 미지원이다.
-- Hancom 수동 게이트는 HANCOM_3PAGE_MANUAL_REQUIRED로 유지한다. 수동 확인 전 FULL_COMPATIBILITY를 선언하지 않는다.
-- SDK 10.0.401 기준 각 브랜치 Restore/Release Build/Test PASS: P2-5 115/115, P2-6 116/116, Hancom 114/114, 출력 문구 114/114, 임시 작업공간 119/119. 각 병합 뒤 전체 검증도 PASS, 최종 main은 122/122, 실패 0, 건너뜀 0. git diff --check PASS.
-- 보호 샘플 #23은 SHA-256 CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED이며 변경되지 않았다. Golden 참조 파일도 추적 상태로 보존됐고 SHA-256 CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D다. docs/recovery는 수정하지 않았고 샘플 생성기를 실행하지 않았다.
-- 미검증 상태는 Hancom 수동 열기, WPF GUI 스모크, 라이선스 자산 검사다. eng/verify-license-assets.ps1은 저장소 지침에 따라 실행하지 않았다. origin/main은 cd09492이고 병합은 로컬에만 있으며 푸시하지 않았다. 교차 기기 준비도 READY_WITH_WARNINGS다.
-- 다음 단계: UI helper가 복구되면 보호 샘플 #23을 열기만 하고 저장하지 않은 채 Hancom 수동 확인을 수행하고 해시를 다시 확인한다. 원격 동기화는 별도 요청 후 진행한다.
 # Cross-device continuation policy
 
 <!-- PROJECT_HANDOFF_POLICY_START -->
