@@ -1,9 +1,40 @@
 # Current Project Handoff
 
-Last updated: 2026-10-17 (Asia/Seoul)
-Status: DOCS_READY_TO_COMMIT / HANCOM_3PAGE_MANUAL_REQUIRED / READY_WITH_WARNINGS
+Last updated: 2026-10-19 (Asia/Seoul)
+Status: READY_WITH_WARNINGS / PERFORMANCE_CAUSE_STILL_UNCLEAR / HANCOM_3PAGE_MANUAL_REQUIRED
 
-## 최신 세션 — 진단 문서 정리 (2026-10-17)
+## 최신 세션 — PC 포맷 전 Git 보존 및 재개 준비 (2026-10-19)
+
+- 사용자 요청: PC 포맷 후 재개할 수 있도록 상세 핸드오프를 작성하고 필요한 병합·커밋·GitHub push까지 수행한다. 추가 답변으로 진단 파일도 Git에 함께 보존하도록 명시 승인했다. 이전 진단 디렉터리 커밋 제외 지시는 이번 보존 범위에서 변경됐다.
+- 저장소 `https://github.com/gim421453-sudo/PDF-TO-HWP.git`, 브랜치 `main`. 시작 HEAD와 fetch 후 origin/main은 모두 `75c99df72c421fc4caa8febe278ef5c0ae3d37f1`, ahead/behind `0 0`. Git fetch는 기본 sandbox의 `.git/FETCH_HEAD` 쓰기 제한으로 한 번 실패했고 승인된 권한으로 재실행해 성공했다.
+- 병합 조사: 로컬 feature 브랜치 9개 모두 `git merge-base --is-ancestor <branch> main`이 성공했다. `git branch --no-merged main`은 비어 있고 연결된 feature worktree 8개 모두 clean이다. main에 없는 작업이나 합칠 새 커밋을 발견하지 않았다. 추가 merge/rebase/브랜치 전환은 필요하지 않다. 옛 worktree는 Temp 아래 경로이며 포맷 후 복구할 필요가 없다.
+- 보존 범위: 이 핸드오프, `docs/handoff/REFORMAT_RECOVERY.md`, `docs/handoff/DIAGNOSTIC_ASSETS.csv`, `artifacts/compatibility-tests/diagnostic/README.md`, 기존 진단 자산 17개. 자산은 총 633,125바이트이며 파일 내용은 변경하지 않았다. production 소스, 의존성, 설정, AGENTS.md, 보호 원본/Golden/reference, 라이선스 원문은 변경하지 않았다.
+- 복구 가이드: **[REFORMAT_RECOVERY.md](REFORMAT_RECOVERY.md)**에 재설치 환경, clone·SHA 확인·빌드·실행·배포 명령, Git 밖 개인 상태, 정확한 진단 재개 절차를 상세히 기록했다. **[DIAGNOSTIC_ASSETS.csv](DIAGNOSTIC_ASSETS.csv)**는 보존 자산 17개의 경로·바이트 길이·SHA-256 원장이다. 포맷 후 먼저 이 원장으로 모든 파일을 확인한다.
+- 검증: manifest 17개 해시/길이 기록, HWPX 11개 ZIP 전체 entry 읽기 및 XML/HPF 구문 해석 PASS, PNG 6개 signature PASS, 보호 SHA 3경로 일치. 이 검사는 Hancom 호환성 또는 성능 PASS를 뜻하지 않는다. 기능 변경이 없어 canonical/publish/Hancom GUI 재실행은 NOT RUN이다. 과거 실제 canonical `20261012-140749/test.trx` counters는 이번에 다시 읽어 total/executed/passed 122, failed/notExecuted 0을 확인했다. 원본 로그는 ignored라 이번 push 대상이 아니다.
+- 측정 근거 정정: 아래 2026-10-17의 약 1.3~2.2초는 정밀 first-paint 측정값이 아니며, 자동 대기와 일부 도구 호출 시간의 참고값이며 실제 paint 시점과 호출 사이 공백을 분리해 측정하지 못했다. 성능 상한/벤치마크로 사용하지 않는다. 특히 23A/23K의 warm 시도는 기존 창 ID·뷰포트가 유지돼 이미 열린 문서 재활성화일 가능성이 높다. 실제 정상 닫기→재로딩으로 검증된 warm 결과로 간주하지 않는다. 당시 문서 렌더링과 응답 관찰은 보존하되 원인 확정 근거로 확대하지 않는다.
+- manual-test 주의: `diagnostic/manual-test/23D-low-resolution-background-manual.hwpx`는 의도치 않은 한글 한 글자 입력 가능성이 있는 forensic 자료다. 원본 23D와 SHA가 다르다. 성능/호환성/저장·재열기 PASS의 근거로 사용 금지. 이번에는 바이트 그대로 보존만 했다.
+- 지원/게이트: 현재 실제 출력은 HWPX Visual Fidelity. OCR/Editable/Safe Hybrid/HWP binary/PDF 대 출력 자동 시각 비교는 미구현 또는 미검증이다. `HANCOM_3PAGE_MANUAL_REQUIRED` 유지, `FULL_COMPATIBILITY` 선언 금지. 성능 원인은 미확정이고 현재 증거만으로 production writer를 바꿀 근거가 없다.
+- 환경 확인: PowerShell 7.6.5, 기본 .NET SDK 10.0.401, 추가 SDK 8.0.425. WPF target은 net8.0-windows/x64. Hancom Office 2024와 Windows Computer Use 제어는 포맷 후 재설치/정상 접근을 확인한다. 전역 Codex 플러그인과 개인 인증은 저장소 clone만으로 복구되지 않는다.
+- 포맷 후 정확한 첫 작업: 아래 복구 가이드 순서대로 clone → main/origin 동기화 확인 → 보호 SHA/진단 manifest 확인 → PowerShell 7·.NET 환경 확인 → `eng/verify.ps1` 실행. 최소 122 tests, 실패 0, skip 0을 새 환경에서 확인한다. 그 뒤 화면 배율·프로세스·열기/정상 닫기 조건을 고정해 23A↔23K 및 필요시 04/15/21/23E/F/G/H/I/J 비교를 재개한다. 원본 #23은 읽기 전용이며 저장하지 않는다.
+- Git checkpoint: 보존 커밋 메시지는 `docs: preserve reformat recovery handoff and Hancom diagnostics`. 이 문서의 자기 커밋 SHA는 미리 기록하지 않는다. 커밋·push 후 `git rev-parse HEAD`, `git rev-parse origin/main`, `git rev-list --left-right --count HEAD...origin/main`, `git status --short`로 동기화와 clean을 확인한다. 원격에 예상치 못한 커밋이 생기면 자동 이력 변경/force push하지 않는다.
+- 교차 기기 상태 `READY_WITH_WARNINGS`: 이번 보존 커밋이 origin/main에 반영됐는지 최종 Git 확인 후 포맷한다. 소스/프로젝트 스킬/진단 파일은 Git으로 복구 가능하다. 개인 원본 PDF/결과물, `%LOCALAPPDATA%/PDF2HWP`의 설정·최근 파일·이력, Hancom 라이선스, GitHub/Codex 인증·개인 설정은 별도 백업 여부 미확인이다. `.agent-sync/`의 로컬 상태와 ignored 실행 산출물은 이번 보존 대상이 아니다. `docs/recovery/` 사용자 보호 자료는 열람/수정하지 않았다. PC 전체 백업이 완료됐다는 뜻은 아니다.
+
+## 이전 세션 — Hancom 성능 원인 최종 분리 (2026-10-17)
+
+- 목표: 동일한 Hancom Office 2024 프로세스에서 04, 15, 21, 23E, 23H의 first/warm open을 비교하고, 23A 배경 전용 3페이지와 23K 본문 텍스트+배경 3페이지를 비교한다. 보호 원본 #23과 Golden은 열거나 수정하지 않았다.
+- 시작/종료 브랜치 `main`, HEAD와 `origin/main` 모두 `75c99df72c421fc4caa8febe278ef5c0ae3d37f1`. 코드, 의존성, 설정, AGENTS.md는 수정하지 않았다. 커밋/푸시/브랜치 변경은 없다.
+- Computer Use로 Hancom 2024를 새로 실행해 같은 프로세스 세션에서 순서대로 비교했다. 04, 15, 21, 23E, 23H, 23A, 23K 각각 첫 열기와 재열기를 확인했다. 파일 선택 대화상자에서 Enter 후 첫 화면 캡처까지 관찰 지연은 대체로 약 1.3~2.2초였으며 정밀 타이머 벤치마크는 아니다. 파일 경로 선택/입력 시간은 이 수치에 포함하지 않았다. CPU/메모리 사용률은 측정하지 않았다.
+- 관찰 결과: 04 1/1쪽 텍스트, 15 1/1쪽 이미지와 겹친 안내 텍스트, 21 1/1쪽 페이지 배경+본문, 23E 고해상도 1/1쪽, 23H 저해상도 1/1쪽이 모두 빠르게 표시됐다. 손상/복구 경고는 보이지 않았다. 04·21·23A·23K에서 스크롤이 응답했다. 21은 130% 확대에서 배경이 화면 밖으로 잘렸고 회색 영역도 보였으나 확대/뷰포트 관찰이며 문서 손상으로 판정하지 않았다. 빈 문서 시작 화면에 선택된 검은색 `가`가 잠시 보였지만 입력하거나 저장하지 않았고, 열어 본 샘플에는 나타나지 않았다.
+- 23A는 배경만 있는 3쪽으로 열렸고 상태 표시줄에 1/3쪽이 표시됐다. 23K는 본문 텍스트와 배경이 함께 보이는 3쪽으로 열렸고 접근성 텍스트에 PAGE 1~3이 확인됐다. 23A와 23K의 first/warm 화면 표시 차이는 관찰 범위에서 크지 않았다. warm 재열기 시 이전 스크롤 위치(23A는 3쪽, 23K는 이전 위치)가 유지되어 첫 화면이 해당 위치에서 보였고, 23K는 위로 스크롤해 1쪽 텍스트와 배경을 다시 확인했다.
+- 원인 판단: 이번 세션에서는 과거의 20~30초대 지연이 재현되지 않았다. 1쪽 고/저해상도(23E/23H) 사이의 뚜렷한 차이는 없었고 3쪽 배경 전용(23A)과 본문+배경(23K)도 관찰상 비슷했다. 따라서 이미지 해상도(H3), 본문/layout(H1), 3-section/background(H2) 중 하나를 원인으로 확정할 증거가 없다. Hancom 초기화/캐시/환경 영향도 가능성으로만 남는다. `PERFORMANCE_CAUSE_STILL_UNCLEAR`; 현재 측정만으로 production 코드 수정을 제안하지 않는다.
+- 진단 샘플 `artifacts/compatibility-tests/diagnostic/23K-background-plus-text-3page.hwpx`를 새로 만들었다. 23A의 패키지/세 section/page background/ref를 유지하고 원본 #23의 같은 section별 기존 텍스트 run과 lineseg를 적용했다. body `hp:pic`은 없으며 A4 세로, 세 section, manifest 참조, ZIP/XML 구조 검사를 통과했다. 내부 `HwpxPackageInspector`에서 23A와 23K 모두 두 차례 `Pass`였다. 23K SHA-256 `EA03D78AE26BB2A1BFCB3AB352E77ABCC09112A6CB8EABBA43EB36FF3739CA03`. 진단 파일은 미추적 로컬 산출물이며 커밋 대상에 넣지 않는다.
+- 보호 확인: 원본 #23 `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6D7DED`, Golden `artifacts/reference-hancom/hancom-minimal-reference.hwpx` `CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D`. 기대 SHA와 일치한다. 원본 #23은 Hancom에서 열지 않았고 저장하지 않았다.
+- Git 상태는 추적 파일 변경 없음, `artifacts/compatibility-tests/diagnostic/` 미추적이다. `git diff --check` PASS. AGENTS.md는 영구 운영 규칙만 유지했다. 핸드오프 변경과 새 진단 HWPX는 아직 커밋/푸시하지 않았다.
+- 미완료/제한: 표준화한 정밀 초 단위 벤치마크와 CPU 관찰은 하지 않았다. 실제 보호 원본 #23의 Hancom 수동 호환성 검증도 이 작업에 포함하지 않았다. `HANCOM_3PAGE_MANUAL_REQUIRED` 유지, `FULL_COMPATIBILITY` 선언 금지.
+- 다음 정확한 작업: 기존 장시간 지연이 재현되면 동일 PC/동일 Hancom 세션에서 화면 배율·첫 화면 위치를 고정하고 first/warm 타이밍 및 CPU를 기록해 비교를 반복한다. 그 전까지 성능만을 이유로 production writer를 변경하지 않는다. 원본 #23 수동 시각 검증은 별도 승인된 보호 절차에 따라 진행한다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: 핸드오프 수정분과 진단 디렉터리는 미커밋/미추적 상태이며 다른 기기 동기화가 확인되지 않았다.
+
+## 이전 세션 — 진단 문서 정리 (2026-10-17)
 
 - 목표/완료: AGENTS.md의 영구 운영 규칙 정리를 그대로 유지하고, 이 문서의 빈 중복 제목과 최신 재개 순서에 충돌하는 문구만 정리했다. 과거 진단 데이터와 절차 기록은 보존했다. 이번에 편집한 파일은 이 핸드오프뿐이다. Hancom GUI 측정과 빌드/테스트는 NOT RUN이다.
 - 브랜치 main, HEAD 29d8640837d13fcb57f858aa8fd8c256d9f4478a. 향후 문서 커밋 후보는 AGENTS.md와 docs/handoff/CURRENT_HANDOFF.md 두 파일뿐이다. git add/commit/push는 하지 않았다. git diff --check PASS. AGENTS.md, 보호 샘플 #23, Golden 및 diagnostic/ 전체 파일은 편집 전후 SHA-256이 같다.
