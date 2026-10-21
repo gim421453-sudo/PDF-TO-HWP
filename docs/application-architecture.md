@@ -50,11 +50,15 @@ their placeholder state.
 Conversion receives the exact immutable logical snapshot. It analyzes each
 distinct source once, maps selected pages into logical `PdfPageInfo` order,
 omits excluded pages and preserves duplicates as separate output sections.
-The current HWPX writer path does not rasterize pages, so conversion reports
-do not claim raster reuse. `JobRenderCache` is a separate job-scoped PDFium
-single-flight boundary for future raster stages; its key includes source SHA,
-source page, quality, rotation and crop, and failures/cancellation are evicted.
-This cache is not HWPX embedded-resource deduplication.
+In the production WPF path, `ConversionJobService` invokes
+`VisualFidelityConverter`, which renders each logical page through the
+job-scoped `JobRenderCache` and writes the rendered PNG resources as HWPX page
+backgrounds. Cache identity includes source SHA, source page, quality,
+rotation and crop; matching logical pages can reuse the raster, while distinct
+page backgrounds that have identical content share an embedded image resource
+by render hash. Failures and canceled renders are evicted. This is image
+resource deduplication, not editable text/table reconstruction or PDF-to-HWPX
+semantic conversion.
 
 `WorkspaceHistory` provides bounded snapshot-based Undo/Redo while preserving
 stable page IDs. Conversion history is capped at 20 metadata-only entries and

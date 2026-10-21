@@ -1,7 +1,56 @@
 # Current Project Handoff
 
-Last updated: 2026-10-19 (Asia/Seoul)
-Status: READY_WITH_WARNINGS / PERFORMANCE_CAUSE_STILL_UNCLEAR / HANCOM_3PAGE_MANUAL_REQUIRED
+Last updated: 2026-10-20 (Asia/Seoul)
+Status: READY_WITH_WARNINGS / ORIGIN_FETCH_NOT_VERIFIED / PERFORMANCE_CAUSE_STILL_UNCLEAR / HANCOM_3PAGE_MANUAL_REQUIRED
+
+## 최신 세션 — 공식 전체 검증 통과 (2026-10-20)
+
+- 목표: 사용자가 저장소 내부 검증 산출물 생성 권한을 허가하여 공식 `eng/verify.ps1` Restore → Release Build → Test를 재시도했다.
+- 실행: PowerShell 7, .NET SDK 10.0.300. `eng/verify.ps1` exit 0, Restore 0 / Release Build 0 / Test 0. 결과 `artifacts/verification/20261020-190001/verification-summary.json`; TRX counters: total 122, executed 122, passed 122, failed 0, notExecuted 0. 테스트 감소/skip 없음.
+- 변환 경로: 같은 세션에서 production composition 통합 테스트 PASS, 이후 기존 DLL로 122개 전체 테스트 PASS. 공식 검증은 이번에 새로 Restore/Build했으므로 최신 checkout 소스의 전체 테스트도 PASS로 확인됐다. UI 버튼 조작 변환 smoke 및 Hancom 수동 검증은 별도이며 이번에 실행하지 않았다.
+- Git 및 변경: `main`, HEAD `4b394711dbab9b5857d2a887fd36729cb849a9cd`. 기존 문서 변경 보존. 이번 검증 결과로 README 테스트 기준일을 2026-10-20으로 갱신하고 핸드오프를 갱신했다. 기능 소스/테스트 코드는 수정하지 않았다. 검증 산출물은 저장소 `artifacts/verification/` 아래에 생성됐다. commit/push/fetch/branch 변경 없음.
+- 검증 차단 정정: 앞 섹션에 기록된 19:00 이전 artifact/MSBuild 임시 경로 거부는 당시 첫 시도의 결과이며, 사용자가 생성 허가한 뒤 동일 공식 스크립트를 재시도해 전체 통과했다. ACL, 보안 정책, OS 설정은 변경하지 않았다.
+- 남은 미확인: `origin/main`은 로컬 tracking ref이며 실제 원격 fetch는 수행하지 않아 원격 최신 여부는 `NOT VERIFIED`. Hancom Office 2024의 3-page sample #23 수동 확인은 필요하고 성능 원인은 미확정이다. 오늘 publish/license/WPF startup은 요청된 공식 verify 범위 밖이라 `NOT RUN`; 전일 완료 결과는 2026-10-19 섹션에 기록.
+- 다음 정확한 작업: 포맷 전 원격 최신 상태를 사용자가 직접 동기화/확인하고, 포맷 후에는 보호 자산 manifest를 확인한 뒤 공식 `eng/verify.ps1`를 새 환경에서 재실행한다. 이후 Hancom 3-page 수동 검증을 진행한다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: 현재 checkout의 Restore/Release Build/Test와 122개 전체 테스트는 PASS지만, 원격 최신 동기화, 보호된 개인 자료 백업 여부, Hancom 3-page 수동 확인은 별도 미확인/대기 항목이다.
+
+## 최신 세션 — 변환 경로 실행 진단 (2026-10-20)
+
+- 목표: 공식 검증 재시도를 포함해 PDF→PDFium 렌더→HWPX page-background 작성→package validation 경로를 실행 가능한 범위에서 확인한다.
+- Git: `main`, HEAD `4b394711dbab9b5857d2a887fd36729cb849a9cd`; 기존 문서 변경을 보존했다. 현재 변경 파일은 `AGENTS.md`, `README.md`, `docs/application-architecture.md`, `docs/handoff/CURRENT_HANDOFF.md`. 기능 소스는 수정하지 않았고 Git mutation은 없다.
+- 변환 경로 대조: `MainWindow.Convert`가 analyzer, `HwpxWriter`, `HwpxPackageInspector`, `PdfiumPageRenderer`, `HwpxImagePackageWriter`를 `ConversionJobService`에 주입한다. 서비스는 immutable snapshot과 선택 순서를 보존하고 `VisualFidelityConverter`→`JobRenderCache` 렌더→HWPX page-background writer→validate/reopen→non-overwrite atomic move로 이어진다.
+- 실행 테스트: production composition을 사용하는 `Production_visual_fidelity_job_renders_duplicate_page_once_and_writes_page_backgrounds` PASS. 회전 90도/CropBox PDF에서 논리 페이지 [0, 0, 1], 중복 raster 재사용 1건, 고유 render hash 2개, 3개 section, manifest의 이미지 2개, 양수 pagePr, package validation PASS를 검사한다. 이후 기존 `Release/net8.0/Pdf2Hwp.Tests.dll`에 `dotnet vstest` 전체 실행: 통과 122, 실패 0, 건너뜀 0. DLL timestamp는 2026-10-19 23:39:56이며 오늘 새 빌드는 하지 않았다.
+- 공식 검증 차단: `eng/verify.ps1`는 `artifacts/verification/20261020-185343` 생성에서 `Access denied`로 중단했다. `dotnet test`의 결과 디렉터리 생성도 거부됐고, `TEMP/TMP`를 저장소 루트로 설정한 재시도는 MSBuild 임시 디렉터리 생성 거부로 중단됐다. 별도 `dotnet vstest`는 기존 DLL로 실행되어 통과했다. ACL/정책 변경이나 우회는 하지 않았다. 따라서 오늘 Restore/Build는 `NOT RUN`, canonical verification은 `BLOCKED_BY_ENVIRONMENT`; 직전 Restore/Release Build PASS는 2026-10-19 기록이다.
+- 기타 검사: `git diff --check` PASS. WPF UI에서 실제 버튼을 눌러 출력 파일을 생성하는 smoke, 오늘의 publish 및 license 검증은 `NOT RUN`. 전일 격리 WPF startup/graceful-close smoke와 publish/license 검증 결과는 기존 2026-10-19 섹션을 참조한다.
+- 알려진 미완료: 실제 원격 fetch 미확인, Hancom Office 2024 3-page 수동 검증 대기, 성능 원인 미확정. OCR/Editable/Safe Hybrid/HWP 출력은 지원 상태로 선언하지 않는다.
+- 다음 정확한 작업: 저장소 내부 verification/MSBuild 임시 경로가 현재 실행 권한으로 생성 가능한 환경에서 `eng/verify.ps1`를 실행해 Restore/Release Build/Test를 다시 증명한다. OS 권한·ACL을 변경하지 말고 동일 차단이면 `BLOCKED_BY_ENVIRONMENT`를 유지한다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: production service 변환 통합 테스트와 기존 122개 전체 테스트는 통과했으나 오늘 Restore/Build 및 WPF UI 변환 smoke, 실제 원격 동기화는 확인되지 않았다.
+
+## 최신 세션 — 정밀 상태 확인 및 문서 정정 (2026-10-20)
+
+- 목표: 포맷 전 최신 핸드오프와 현재 저장소를 대조하고, 확인 가능한 오류를 수정한 뒤 검증 상태를 기록한다. 기존 변경은 보존했으며 커밋·브랜치 변경은 하지 않았다.
+- Git: `main`, HEAD `4b394711dbab9b5857d2a887fd36729cb849a9cd`; `origin/main` 로컬 추적 ref와 같은 커밋, 표시 상태 `main...origin/main`. 실제 원격 fetch는 이전 `.git/FETCH_HEAD` 접근 거부 이후 재시도하지 않아 원격 최신 여부는 계속 `NOT VERIFIED`. 작업 트리에는 이전 추적 변경 `AGENTS.md`, `README.md`, `docs/handoff/CURRENT_HANDOFF.md`가 있었고 이번에는 `docs/application-architecture.md`도 수정했다. 소스/테스트 파일은 수정하지 않았다.
+- 코드 대조: WPF가 `ConversionJobService`에 PDFium renderer와 image writer를 주입하며, 변환 서비스는 `VisualFidelityConverter.ConvertPagesAsync`를 호출한다. 페이지 렌더는 작업 범위 `JobRenderCache`를 사용하고 PNG page-background를 기록하며, package validate/reopen 후 non-overwrite atomic move를 수행한다. 그래서 architecture 문서의 “현재 writer는 rasterize하지 않으며 cache는 미래 단계용” 설명은 코드와 불일치했다. `HistoryRetry`의 재시도 준비 예외는 `PrepareRetryAsync` 내부에서 사용자 상태로 처리됨을 확인했다. 검토한 범위에서 새 기능 코드 결함은 확인하지 못했으며 이는 전체 소스 리뷰나 실행 검증을 뜻하지 않는다.
+- 문서 수정: README 제목/요약과 테스트 범위를 현재 Visual Fidelity 데스크톱 앱에 맞게 고쳤다. `docs/application-architecture.md`에 production 렌더→cache→HWPX page-background 경로 및 이미지 리소스 중복 제거와 편집 가능한 의미 변환의 차이를 반영했다. AGENTS의 이 PC가 PowerShell 5.1이라는 오래된 기기별 문장을 PowerShell 7 선행 조건을 실행 시 확인하는 영구 규칙으로 바꿨다.
+- 검증: `git diff --check` PASS. 2026-10-20 `pwsh -NoProfile -File eng/verify.ps1`는 첫 산출물 폴더 `artifacts/verification/20261020-185343` 생성에서 `Access denied`로 중단되어 Restore/Build/Test는 이번 세션에 실행되지 않았다. 권한/ACL/정책 변경이나 우회는 하지 않았다. 직전 확인 가능한 공식 결과는 2026-10-19 Restore/Release Build/Test PASS, 122/122 통과, 실패 0, 미실행 0이다. 이번 수정은 문서만이다.
+- 미실행/미검증: 이번 세션의 publish, license asset verification, WPF smoke는 실행하지 않았다. 최신 원격 동기화도 확인되지 않았다. sample #23과 Golden 파일은 열거나 수정하지 않았다.
+- 다음 정확한 작업: 포맷 후 저장소를 사용자 승인 절차로 원격과 동기화하고 branch/HEAD/status 및 보호 자산 manifest를 확인한 다음 `pwsh -NoProfile -File eng/verify.ps1`를 실행해 최소 122개 테스트와 0 skip을 재확인한다. 검증 산출물 경로 쓰기 거부가 지속되면 승인을 우회하지 말고 해당 환경 차단을 기록한다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: 현재 저장된 origin 추적 ref와 작업 사본은 일치하지만 실제 원격 최신 여부는 `NOT VERIFIED`; 공식 검증은 마지막 성공이 2026-10-19이며 이번 세션 실행은 환경 권한에서 차단됐다. Hancom 3-page sample 수동 검증 및 성능 원인은 계속 미완료/미확정이다.
+
+## 최신 세션 — 포맷 전 전체 상태 정밀 검증 (2026-10-19)
+
+- 목표: Git 동기화, 문서, 빌드·테스트·게시·재배포 고지 및 실제 WPF 시작 상태를 포맷 전에 점검하고 명확한 문서 오류를 최소 수정한다.
+- Git: 현재 `main`, HEAD `4b394711dbab9b5857d2a887fd36729cb849a9cd`; 로컬 `origin/main` 추적 ref도 같은 SHA이며 ahead/behind `0/0`. 추적 작업 트리는 시작 시 clean이었다. `git fetch origin`은 `.git/FETCH_HEAD` 접근 거부였고 승인 검토에서 원격 Git 상태 변경 위험으로 거부되어 재시도하지 않았다. 따라서 저장된 origin ref와 같은 상태임은 확인했으나 실제 원격 최신 여부는 `NOT VERIFIED`다.
+- 문서 대조: README의 자동 테스트 수 `106`은 오래된 값이었다. 이번 canonical 검증의 122건으로 수정했다. 2026-10-02 `docs/audit/`와 `docs/recovery/`의 발견 사항은 당시 기록으로 보존하며 현재 결함 목록으로 취급하지 않는다. 예: 오프셋 CropBox 이중 적용은 `b5bef36`에서 수정됐고 현재 비대칭 오프셋·회전별 픽셀 회귀 테스트가 있다.
+- 검증: PowerShell 7.6.5, .NET SDK 10.0.300. `eng/verify.ps1` PASS (Restore 0 / Release Build 0 / Test 0), TRX 122/122 통과, 실패 0, 미실행 0. 산출물 `artifacts/verification/20261019-233935`.
+- 실행 환경: sandbox 기본 권한에서는 `artifacts/verification`, `obj`, `artifacts/license-audit` 쓰기가 거부되어 각 공식 검증을 허용된 저장소 내부 쓰기 권한으로 재실행했다. 재실행은 모두 성공했으며 ACL·시스템 설정은 변경하지 않았다.
+- 게시: `eng/publish-win-x64.ps1` PASS. `artifacts/win-x64-singlefile/PDF2HWP.exe` 187,718,118 bytes. `eng/verify-license-assets.ps1` PASS (`LICENSE_ASSETS_VERIFIED`), PDFium DLL provenance/hash, 15개 PDFium 구성요소 고지, NuGet 서명 7개, 게시된 notice/license bundle을 검증했다.
+- WPF smoke: 기존 PDF2HWP 프로세스가 없는 것을 확인하고 저장소 내부 격리 LocalAppData 경로로 게시 EXE를 실행했다. 창 제목 `PDF2HWP`, `CloseMainWindow()` 정상 종료, 종료 코드 0. 기존 사용자 프로필을 사용하지 않았다.
+- 무결성: `DIAGNOSTIC_ASSETS.csv`의 진단 자산 17개 길이/SHA-256 PASS. sample #23, 두 Golden 참조의 기대 SHA-256 모두 일치. 샘플/Golden은 수정하지 않았다. 문서 변경 후 `git diff --check` PASS.
+- 이번 추적 변경: `AGENTS.md`에 영구 작업 재개 규칙 추가, README 테스트 수 수정, 이 핸드오프 갱신. `CHANGELOG.md`, 배포 문서, 개발일지는 수정하지 않았다 (`DEVLOG_AUTO_UPDATE=false`). 기능 코드/의존성은 변경하지 않았다.
+- 제한/미완료: 실제 원격 fetch는 검토 차단으로 미수행. Hancom Office 2024 sample #23 수동 검증은 여전히 필요하고 성능 원인은 미확정이다. 전체 한컴 호환성, OCR/Editable/Safe Hybrid/HWP 출력은 선언/지원하지 않는다.
+- 다음 정확한 작업: 사용자가 네트워크 Git fetch를 직접 실행하거나 허용된 환경에서 `git fetch origin` 후 `git rev-list --left-right --count HEAD...origin/main`으로 최신 동기화를 확인한다. 원격과 동기화된 후 포맷한다면 `docs/handoff/REFORMAT_RECOVERY.md`의 보호 해시/17자산 manifest 확인과 `pwsh -NoProfile -File eng/verify.ps1`를 새 환경에서 먼저 실행한다. 그 다음 Hancom 수동 진단을 재개한다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: 저장소 문서/소스/진단 자료는 현재 main과 로컬 origin 추적 ref에 있지만 실제 원격 최신 여부는 fetch가 차단되어 확인되지 않았다. 보호된 사용자 PDF, 개인 앱 설정, Hancom 및 GitHub/Codex 인증은 별도 백업/재인증 항목이다.
 
 ## 최신 세션 — PC 포맷 전 Git 보존 및 재개 준비 (2026-10-19)
 

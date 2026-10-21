@@ -1,6 +1,6 @@
-# PDF2HWP — 1차 기반 구현
+# PDF2HWP — HWPX Visual Fidelity 변환기
 
-Windows x64 / .NET 8 / WPF 기반 PDF→HWPX 변환기의 배포용 아키텍처 초안입니다. 이 단계는 PDF 분석, PDFium 렌더러 연결, 최소 HWPX 패키지 생성 및 구조 검증까지 구현합니다.
+Windows x64 / .NET 8 / WPF 기반 PDF→HWPX 데스크톱 앱입니다. 현재 구현된 변환 경로는 PDF 페이지를 PDFium으로 렌더링하고 HWPX 페이지 배경 이미지로 패키징하는 Visual Fidelity 모드입니다. 페이지 순서·회전·자르기·중복을 편집할 수 있으며, 패키지 검증을 통과한 결과만 출력합니다. 프로젝트는 사전 출시 상태이며, 한컴오피스 호환성은 문서에 명시된 수동 검증 범위로 제한됩니다.
 
 ## Build and run
 
@@ -17,7 +17,7 @@ dotnet publish src/Pdf2Hwp.App/Pdf2Hwp.App.csproj -p:PublishProfile=win-x64-sing
 - `Pdf2Hwp.Core`: UI·엔진·검증·한컴 연동 간 계약과 도메인 모델.
 - `Pdf2Hwp.Infrastructure`: PdfPig 분석, PDFium 렌더링 어댑터, ZIP/XML 기반 HWPX writer, package inspector.
 - `Pdf2Hwp.App`: 비동기 WPF 선택/drag-drop/취소/진행률 UI.
-- `Pdf2Hwp.Tests`: HWPX 패키지 구조 검사 proof test.
+- `Pdf2Hwp.Tests`: 분석, 렌더링, HWPX 구조, 변환 작업 및 UI 지원 기능의 자동 회귀 테스트.
 
 `HWP` 저장은 별도 라이선스·설치 조건을 갖는 Hancom adapter 계약으로만 제공하며, 현재는 의도적으로 구현하지 않았습니다. 이 빌드는 한컴 설치나 시스템 설정을 바꾸지 않습니다.
 
@@ -46,7 +46,7 @@ The HWPX writer supports page geometry, embedded images, and page-background ima
 
 - Restore: PASS
 - Build: PASS
-- Test: 106 / 106 PASS, 0 skipped (canonical verification on 2026-09-28)
+- Test: 122 / 122 PASS, 0 skipped (canonical verification on 2026-10-20)
 - Windows x64 self-contained single-file publish: PASS
 - Published EXE WPF main-window startup and graceful-close smoke: PASS (repository-local test data)
 - Visual Fidelity regression tests: PASS
