@@ -1,7 +1,19 @@
 # Current Project Handoff
 
-Last updated: 2026-10-20 (Asia/Seoul)
-Status: READY_WITH_WARNINGS / ORIGIN_FETCH_NOT_VERIFIED / PERFORMANCE_CAUSE_STILL_UNCLEAR / HANCOM_3PAGE_MANUAL_REQUIRED
+Last updated: 2026-11-11 (Asia/Seoul)
+Status: READY_WITH_WARNINGS / PERFORMANCE_CAUSE_STILL_UNCLEAR / HANCOM_3PAGE_MANUAL_REQUIRED
+
+## 최신 세션 — 원격 및 현재 환경 재검증 (2026-11-11)
+
+- 목표: 원격 상태, 앱 실행 및 경로, 현재 환경의 공식 검증을 확인한다.
+- Git: 시작 시 `main`, HEAD `70f699c83df159a991181e070bf79bb15cce05a3`, 추적 파일 변경 없음. GitHub API로 실제 원격 `main`이 같은 SHA임을 확인했다. 로컬 `origin/main`도 같은 SHA다. `git ls-remote`는 DNS 이름 해석 실패였으나 API 조회는 성공했다. fetch, pull, commit, push, 브랜치 변경은 하지 않았다. 이전 최신 섹션의 HEAD `4b39471`은 현재 HEAD의 조상이며 사이 커밋 `70f699c`는 문서 4개만 변경했다. 사용자가 명시적으로 최신 핸드오프 갱신과 재검증을 요청했다.
+- 환경 및 경로: PowerShell 7.6.9, .NET SDK 10.0.403, SDK 8.0.427도 설치됨. 솔루션, 앱 프로젝트, 검증 스크립트, 라이선스 폴더와 고지 파일, 기본 문서 폴더와 LocalAppData 상위 폴더 존재 확인. 실제 사용자의 저장된 출력 폴더와 개별 사용자 파일의 접근·쓰기는 확인하지 않았다.
+- 공식 검증: 일반 샌드박스에서 `eng/verify.ps1`는 사용자 NuGet.Config 접근 거부로 Restore 실패, Build/Test 미실행. 권한을 적용해 같은 스크립트를 재실행한 결과 Restore 0 / Release Build 0 / Test 0, 122개 실행·통과, 실패 0·미실행 0. 결과 `artifacts/verification/20261111-211304/verification-summary.json` 및 `test.trx`. 이전 실패 기록 `artifacts/verification/20261111-211239/`은 보존했다.
+- 앱 실행: 새 Release 빌드 `src/Pdf2Hwp.App/bin/Release/net8.0-windows/PDF2HWP.exe`를 격리된 `LOCALAPPDATA`로 실행하여 `PDF2HWP` 주 창 표시, 정상 닫기 및 종료 코드 0 확인. 자동 테스트에는 production 변환 경로가 포함되지만 실제 UI 버튼을 통한 PDF 선택·변환과 Hancom 열기는 이번에 실행하지 않았다. publish 및 라이선스 검증도 이번에는 NOT RUN.
+- 변경: 기능 소스와 설정은 변경하지 않았으며 이 핸드오프만 수정했다. 검증 산출물은 `artifacts/verification/`에 생성했다. README·CHANGELOG·배포 문서 갱신 사유는 없고 `DEVLOG_AUTO_UPDATE=false`다.
+- 남은 문제: Hancom 3페이지 수동 검증과 성능 원인 확인은 미완료. FULL_COMPATIBILITY를 선언하지 않는다. 사용자 개인 파일과 저장된 출력 폴더의 실제 접근 여부는 NOT VERIFIED.
+- 다음 작업: 실제 사용자가 선택한 PDF와 출력 폴더로 UI 변환을 확인하고, 보호 절차에 따라 Hancom Office 2024에서 3페이지 결과를 수동 검증한다. 이번 공식 테스트 성공을 미실행으로 반복 기록하지 않는다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: 핸드오프와 인계 규칙은 Git 추적 대상이고 원격 HEAD는 확인했지만, 이번 핸드오프 수정은 미커밋·미푸시이며 다른 기기 동기화는 확인되지 않았다. 개인 설정·원본 PDF와 결과물 백업도 미확인이다.
 
 ## 최신 세션 — 공식 전체 검증 통과 (2026-10-20)
 
