@@ -3,6 +3,16 @@
 Last updated: 2026-11-11 (Asia/Seoul)
 Status: READY_WITH_WARNINGS / PERFORMANCE_CAUSE_STILL_UNCLEAR / HANCOM_3PAGE_MANUAL_REQUIRED
 
+## 최신 세션 — 커밋·푸시 및 UI 변환 재개 (2026-11-11)
+
+- 목표: 이전 검증 핸드오프를 커밋·푸시하고 UI 변환 및 한컴 검증을 진행한다.
+- Git: 이전 핸드오프를 `612f6e96b1d46dffcdcfac1cfb682ade0ae185d5`로 커밋하고 `origin/main`에 푸시했다. 푸시 직후 로컬 HEAD와 원격 추적 ref는 일치했다.
+- 보호 확인: 진단 manifest 17개 모두 크기·SHA 일치. 보호 #23 `CEF60905336D3AF0B1E2D308D54D16764B4CBF10DA90D1FAF06E26C1CD6E26C1CD6D7DED`, Golden `CE7D9151F38FAA90C32C7D7A11C866EE81FA478FC2963A236194A8DDCCF69F4D`; 작업 후에도 일치했다.
+- UI: Release 앱 주 창과 PDF 추가 대화상자 표시 확인. 격리된 `LOCALAPPDATA` 실행에서 3페이지 fixture의 경로 입력을 시도했으나 자동화 도구가 대화상자 입력 초점을 잘못 보고했고 입력 텍스트도 화면에 나타나지 않았다. 선택을 취소하고 정상 종료했다. PDF 선택·변환·출력·한컴 3페이지 열기 모두 NOT RUN이며 앱 변환 실패로 판정하지 않는다. 기존 한글 창에 사용자 문서가 열려 있어 조작하지 않았다.
+- 주의: 격리 실행 전에 Computer Use가 기본 환경으로 앱을 한 차례 실행하고 정상 종료했다. 앱 코드는 시작 시 설정/캐시를 읽고 정리하며 종료 시 설정을 저장하므로 실제 사용자 LocalAppData에 접근 또는 설정 파일 갱신이 있었을 가능성을 배제할 수 없다. 개인 파일 내용은 조사하거나 복구하지 않았다. 이후 시험은 `artifacts/verification/ui-smoke-20261111/localappdata`로 격리했다.
+- 다음 작업: 파일 대화상자를 정확히 대상으로 선택할 수 있는 Computer Use 세션에서 `artifacts/pdf-fixtures/visual-fidelity-a4-portrait-3pages.pdf`를 선택하고, 별도 검증 폴더로 출력한 뒤 화면 결과와 생성 패키지를 확인한다. 사용 중인 한글 문서를 보존하면서 별도 결과를 열어 각 페이지를 확인한다. 보호 원본은 읽기 전용이고 저장하지 않는다.
+- 교차 기기 준비도 `READY_WITH_WARNINGS`: 이 최신 결과가 커밋·푸시되기 전에는 다른 기기 동기화가 확인되지 않는다. Hancom 3페이지 검증 및 성능 원인은 여전히 미확정이다.
+
 ## 최신 세션 — 원격 및 현재 환경 재검증 (2026-11-11)
 
 - 목표: 원격 상태, 앱 실행 및 경로, 현재 환경의 공식 검증을 확인한다.
